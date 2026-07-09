@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CISO Assistant API Manager Web UI</title>
+  <link rel="stylesheet" href="/web/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>CISO Assistant API Manager Web UI</h1>
+      <p class="subtitle">Local autonomous interface for reading, filtering, exporting and importing CISO Assistant API data.</p>
+    </div>
+    <div id="health" class="health">Loading...</div>
+  </header>
+
+  <main class="layout">
+    <section class="panel controls">
+      <h2>Data Explorer</h2>
+
+      <label for="resourceSelect">Resource</label>
+      <select id="resourceSelect"></select>
+
+      <div class="grid two">
+        <div>
+          <label for="statusFilter">API status filter</label>
+          <input id="statusFilter" placeholder="active, draft, deprecated..." />
+        </div>
+        <div>
+          <label for="searchFilter">API search</label>
+          <input id="searchFilter" placeholder="Search text" />
+        </div>
+      </div>
+
+      <label for="fieldsInput">Columns / export fields</label>
+      <input id="fieldsInput" placeholder="id,ref_id,name,status,folder" />
+
+      <div class="button-row">
+        <button id="loadBtn">Load Data</button>
+        <button id="exportBtn" class="secondary">Export JSON</button>
+      </div>
+
+      <div id="exportResult" class="message"></div>
+    </section>
+
+    <section class="panel import-panel">
+      <h2>Import JSON</h2>
+      <p class="hint">Dry-run is recommended before applying changes. The token stays server-side.</p>
+
+      <label for="importFile">JSON file</label>
+      <input id="importFile" type="file" accept=".json,application/json" />
+
+      <div class="grid two">
+        <div>
+          <label for="keySelect">Identification key</label>
+          <select id="keySelect">
+            <option value="id">id</option>
+            <option value="ref_id">ref_id</option>
+          </select>
+        </div>
+        <div>
+          <label for="excludeInput">Exclude fields</label>
+          <input id="excludeInput" placeholder="folder,library,provider" />
+        </div>
+      </div>
+
+      <div class="button-row">
+        <button id="dryRunBtn">Dry-run Import</button>
+        <button id="applyImportBtn" class="danger">Apply Import</button>
+      </div>
+
+      <pre id="importResult" class="output"></pre>
+    </section>
+
+    <section class="panel results-panel">
+      <div class="results-header">
+        <div>
+          <h2>Results</h2>
+          <p id="resultSummary" class="hint">No data loaded yet.</p>
+        </div>
+        <div>
+          <label for="localSearch">Local table filter</label>
+          <input id="localSearch" placeholder="Filter loaded table" />
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table id="dataTable">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Localhost-only administration tool. Do not expose it on an untrusted network.
+  </footer>
+
+  <script src="/web/app.js"></script>
+</body>
+</html>
