@@ -24,12 +24,23 @@
 
       <div class="grid two">
         <div>
-          <label for="statusFilter">API status filter</label>
-          <input id="statusFilter" placeholder="active, draft, deprecated..." />
+          <label for="statusFilter">Status</label>
+          <select id="statusFilter"><option value="">All statuses</option></select>
         </div>
         <div>
           <label for="searchFilter">API search</label>
           <input id="searchFilter" placeholder="Search text" />
+        </div>
+      </div>
+
+      <div class="grid two">
+        <div>
+          <label for="folderFilter">Folder</label>
+          <select id="folderFilter"><option value="">All folders</option></select>
+        </div>
+        <div>
+          <label for="perimeterFilter">Perimeter</label>
+          <select id="perimeterFilter"><option value="">All perimeters</option></select>
         </div>
       </div>
 
@@ -39,6 +50,7 @@
       <div class="button-row">
         <button id="loadBtn">Load Data</button>
         <button id="exportBtn" class="secondary">Export JSON</button>
+        <button id="refreshOptionsBtn" class="secondary soft">Refresh Lists</button>
       </div>
 
       <div id="exportResult" class="message"></div>
@@ -46,7 +58,7 @@
 
     <section class="panel import-panel">
       <h2>Import JSON</h2>
-      <p class="hint">Dry-run is recommended before applying changes. The token stays server-side.</p>
+      <p class="hint">Strict mode removes unchanged fields from PATCH payloads. Use dry-run first.</p>
 
       <label for="importFile">JSON file</label>
       <input id="importFile" type="file" accept=".json,application/json" />
@@ -64,6 +76,11 @@
           <input id="excludeInput" placeholder="folder,library,provider" />
         </div>
       </div>
+
+      <label class="checkbox-line">
+        <input id="strictImport" type="checkbox" checked />
+        Strict import: send only changed fields on PATCH
+      </label>
 
       <div class="button-row">
         <button id="dryRunBtn">Dry-run Import</button>
