@@ -436,44 +436,79 @@ def _match_where(obj: dict, clauses: list) -> bool:
 # ─────────────────────────────────────────────
 # RECONSTRUCTION DU PAYLOAD (JSON → API)
 # ─────────────────────────────────────────────
-def _parse_complex_field(val):
+STRING_FIELDS = {
+    "value",
+    "choices_definition",
+}
+
+RESOURCE_STRING_FIELDS: dict = {
+    # "metrology/custom-metric-samples": {"extra_field"},
+}
+
+def _parse_complex_field(val, key=None, resource=None):
     """
-    Reconstruit champs complexes lors de l'import:
-     - string JSON -> parse
-     - string avec '\n' -> liste
-     - sinon string
+    Détecte et reconstruit les champs complexes lors de l'import.
+
+    Règles appliquées dans l'ordre :
+      1. Non-string → retourné tel quel (bool, int, list, dict...)
+      2. Champ protégé (STRING_FIELDS ou RESOURCE_STRING_FIELDS) → str conservée
+      3. Chaîne ressemblant à du JSON ({...}, [...], "...") → json.loads()
+      4. Chaîne avec séparateur '|' → liste d'UUIDs
+      5. Chaîne simple → str (ou None si vide)
     """
     if not isinstance(val, str):
         return val
-    stripped = val.strip()
 
-    if stripped and stripped[0] in ("{", "[", '"'):
+    stripped = val.strip()
+    if not stripped:
+        return None
+
+    # Champs protégés : conserver la chaîne sans désérialisation
+    resource_extras = RESOURCE_STRING_FIELDS.get(resource, set()) if resource else set()
+    if key and (key in STRING_FIELDS or key in resource_extras):
+        return val
+
+    # Tentative de désérialisation JSON
+    if stripped[0] in ("{", "[", '"'):
         try:
             return json.loads(stripped)
         except json.JSONDecodeError:
             pass
 
-    if "\n" in stripped:
-        return [t.strip() for t in stripped.split("\n") if t.strip()]
+    # Séparateur | → liste d'UUIDs
+    if "|" in stripped:
+        return [t.strip() for t in stripped.split("|") if t.strip()]
 
-    return val if stripped else None
+    return val
 
 
-def build_payload(item, exclude_keys=None):
-    """Construit payload API (ignore id, None, chaines vides)."""
+def build_payload(item, exclude_keys=None, resource=None):
+    """
+    Construit le payload API depuis un objet JSON importé.
+    - Exclut 'id' et les clés de exclude_keys
+    - Préserve les champs STRING_FIELDS comme chaînes (pas de désérialisation JSON)
+    - Reconstruit les autres champs complexes (listes, dicts imbriqués)
+    - Ignore les valeurs None / chaînes vides
+    """
     skip = {"id"} | (set(exclude_keys) if exclude_keys else set())
     payload = {}
+
     for key, val in item.items():
         if key in skip:
             continue
+
         if val is None:
             continue
         if isinstance(val, str) and not val.strip():
             continue
-        parsed = _parse_complex_field(val)
+
+        parsed = _parse_complex_field(val, key=key, resource=resource)
+
         if parsed is None:
             continue
+
         payload[key] = parsed
+
     return payload
 
 
@@ -646,7 +681,7 @@ def cmd_import(resource, json_file, dry_run=False, exclude_keys=None, key_field=
 
     for i, item in enumerate(items, start=1):
         name = item.get("name") or item.get("ref_id") or item.get("str") or f"item-{i}"
-        payload = build_payload(item, exclude_keys=exclude_keys)
+        payload = build_payload(item, exclude_keys=exclude_keys, resource=resource)
 
         if not payload:
             print(f" Item {i} → [IGNORÉ] Payload vide (aucun champ utile).")
