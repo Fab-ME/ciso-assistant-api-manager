@@ -25,7 +25,9 @@
       <div class="grid two">
         <div>
           <label for="statusFilter">Status</label>
-          <select id="statusFilter"><option value="">All statuses</option></select>
+          <select id="statusFilter">
+            <option value="">All statuses</option>
+          </select>
         </div>
         <div>
           <label for="searchFilter">API search</label>
@@ -36,20 +38,33 @@
       <div class="grid two">
         <div>
           <label for="folderFilter">Folder</label>
-          <select id="folderFilter"><option value="">All folders</option></select>
+          <select id="folderFilter">
+            <option value="">All folders</option>
+          </select>
         </div>
         <div>
           <label for="perimeterFilter">Perimeter</label>
-          <select id="perimeterFilter"><option value="">All perimeters</option></select>
+          <select id="perimeterFilter">
+            <option value="">All perimeters</option>
+          </select>
         </div>
       </div>
 
       <label for="fieldsInput">Columns / export fields</label>
       <input id="fieldsInput" placeholder="id,ref_id,name,status,folder" />
 
+      <div class="column-selectors">
+        <h3>Display Columns</h3>
+        <div id="displayColumns"></div>
+
+        <h3>Export Columns</h3>
+        <div id="exportColumns"></div>
+      </div>
+
       <div class="button-row">
         <button id="loadBtn">Load Data</button>
-        <button id="exportBtn" class="secondary">Export JSON</button>
+        <button id="exportBtn" class="secondary">Export Full Dataset</button>
+        <button id="exportFilteredBtn" class="secondary">Export Filtered Results</button>
         <button id="refreshOptionsBtn" class="secondary soft">Refresh Lists</button>
       </div>
 
