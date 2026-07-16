@@ -229,13 +229,28 @@ python ciso_manager.py get metric-definitions --all
 ```
 ciso-assistant-api-manager/
 ├── ciso_manager.py       # Script principal (aucune dépendance externe)
-├── LICENSE               # MIT avec restriction d'usage commercial
-├── README.md             # Ce fichier
-├── CHANGELOG.md          # Historique des versions
+├── LICENSE              # MIT avec restriction d'usage commercial
+├── README.md            # Documentation principale
+├── CHANGELOG.md         # Historique des versions
+│
+├── exports/            # Fichiers exportés par l'application
+│   └── .gitkeep
+│
+├── imports/            # Fichiers destinés à être importés
+│   └── .gitkeep
+│
+├── logs/               # Journaux d'exécution
+│   └── .gitkeep
+│
+├── web/
+│   ├── index.html      # Interface utilisateur
+│   ├── app.js          # Logique JavaScript
+│   └── style.css       # Feuille de style
+│
 └── examples/
-    ├── create_metrics.json       # Exemple : créer des métriques
-    ├── update_metrics.json       # Exemple : mise à jour partielle
-    └── export_policies.sh        # Exemple : script shell d'export
+    ├── create_metrics.json    # Exemple : création de métriques
+    ├── update_metrics.json    # Exemple : mise à jour partielle
+    └── export_policies.sh     # Exemple : script d'export
 ```
 
 ---
