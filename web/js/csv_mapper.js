@@ -9,10 +9,113 @@ const state = {
   csvHeaders: [],
   mapping: {},
   generatedObjects: [],
+  importedJsonObjects: [],
+  options: {},
+  reverseLookups: {},
+};
+
+const REFERENCE_FIELDS = {
+  folder: "folders",
+  folders: "folders",
+  parent_folder: "folders",
+  owner: "users",
+  owners: "users",
+  assignee: "users",
+  user: "users",
+  users: "users",
+  team: "teams",
+  teams: "teams",
+  entity: "entities",
+  entities: "entities",
+  perimeter: "perimeters",
+  perimeters: "perimeters",
+  role: "roles",
+  roles: "roles",
 };
 
 function csvElementsPresent() {
   return Boolean(document.getElementById("csvMapperPage"));
+}
+
+function normalizeKey(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isUuidLike(value) {
+  const text = String(value || "");
+  return text.length >= 32 && text.includes("-");
+}
+
+function resourceForField(fieldName) {
+  const name = String(fieldName || "").toLowerCase();
+  if (REFERENCE_FIELDS[name]) return REFERENCE_FIELDS[name];
+  if (name.endsWith("_id") && REFERENCE_FIELDS[name.slice(0, -3)]) return REFERENCE_FIELDS[name.slice(0, -3)];
+  return null;
+}
+
+function getOptionLabel(resource, id) {
+  if (!resource || !id) return null;
+  const list = state.options?.[resource] || [];
+  const item = list.find((entry) => String(entry.id) === String(id));
+  return item?.label || null;
+}
+
+function displayValue(fieldName, value) {
+  if (value === null || value === undefined || value === "") return "";
+
+  if (Array.isArray(value)) {
+    return value.map((item) => displayValue(fieldName, item)).filter(Boolean).join(" | ");
+  }
+
+  if (typeof value === "object") {
+    if (value.name || value.str || value.label || value.email || value.username) {
+      return value.name || value.str || value.label || value.email || value.username;
+    }
+    if (value.id) {
+      const resource = resourceForField(fieldName);
+      return getOptionLabel(resource, value.id) || value.id;
+    }
+    return JSON.stringify(value);
+  }
+
+  const resource = resourceForField(fieldName);
+  if (resource && isUuidLike(value)) {
+    return getOptionLabel(resource, value) || String(value);
+  }
+
+  return String(value);
+}
+
+function buildReverseLookups() {
+  state.reverseLookups = {};
+  Object.entries(state.options || {}).forEach(([resource, values]) => {
+    state.reverseLookups[resource] = {};
+    (values || []).forEach((entry) => {
+      state.reverseLookups[resource][normalizeKey(entry.label)] = entry.id;
+      state.reverseLookups[resource][normalizeKey(entry.id)] = entry.id;
+    });
+  });
+}
+
+function technicalValue(fieldName, value) {
+  if (value === null || value === undefined) return value;
+
+  const resource = resourceForField(fieldName);
+  if (!resource) return parseCellValue(value);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => technicalValue(fieldName, item)).filter((item) => item !== "");
+  }
+
+  if (typeof value === "object") {
+    return value.id || value.name || value.str || value.label || value;
+  }
+
+  const raw = String(value).trim();
+  if (raw === "") return "";
+
+  const lookup = state.reverseLookups[resource] || {};
+  return lookup[normalizeKey(raw)] || raw;
 }
 
 function splitCsvLine(line, delimiter) {
@@ -77,7 +180,7 @@ function parseCsv(text) {
 }
 
 function normalizeColumns(items) {
-  const preferred = ["id", "ref_id", "name", "description", "status", "folder", "parent_folder", "owner"];
+  const preferred = ["id", "ref_id", "name", "description", "status", "folder", "parent_folder", "owner", "owners", "assignee"];
   const keys = new Set();
   items.slice(0, 100).forEach((item) => Object.keys(item || {}).forEach((key) => keys.add(key)));
   const ordered = preferred.filter((key) => keys.has(key));
@@ -97,9 +200,20 @@ function fillSelect(selectId, options, placeholder) {
 }
 
 async function loadCsvResources() {
-  const data = await api("/api/resources");
-  state.resources = data.resources || [];
+  const [resourcesData, optionsData] = await Promise.all([
+    api("/api/resources"),
+    api("/api/options").catch(() => ({ options: {} })),
+  ]);
+  state.resources = resourcesData.resources || [];
+  state.options = optionsData.options || {};
+  buildReverseLookups();
   fillSelect("csvResourceSelect", state.resources, "Choisir une ressource");
+}
+
+async function refreshOptions() {
+  const data = await api("/api/options?force=true").catch(() => ({ options: {} }));
+  state.options = data.options || {};
+  buildReverseLookups();
 }
 
 async function loadExistingItems() {
@@ -110,11 +224,13 @@ async function loadExistingItems() {
   }
 
   setMessage("csvMapperMessage", "Chargement des éléments existants...", "");
+  await refreshOptions();
   const data = await api(`/api/data?resource=${encodeURIComponent(resource)}`);
   state.existingItems = data.exportItems || data.items || [];
   state.existingColumns = normalizeColumns(state.existingItems);
   renderExistingPreview();
   renderMappingTable();
+  renderGeneratedPreview();
   setMessage("csvMapperMessage", `${state.existingItems.length} élément(s) existant(s) chargé(s).`, "success");
 }
 
@@ -122,7 +238,7 @@ function renderExistingPreview() {
   const container = $("csvExistingPreview");
   if (!container) return;
 
-  const columns = state.existingColumns.slice(0, 8);
+  const columns = state.existingColumns.slice(0, 10);
   const rows = state.existingItems.slice(0, 10);
 
   if (!rows.length) {
@@ -135,7 +251,7 @@ function renderExistingPreview() {
       <table>
         <thead><tr>${columns.map((col) => `<th>${escapeHtml(col)}</th>`).join("")}</tr></thead>
         <tbody>
-          ${rows.map((row) => `<tr>${columns.map((col) => `<td>${escapeHtml(row[col] ?? "")}</td>`).join("")}</tr>`).join("")}
+          ${rows.map((row) => `<tr>${columns.map((col) => `<td>${escapeHtml(displayValue(col, row[col]))}</td>`).join("")}</tr>`).join("")}
         </tbody>
       </table>
     </div>
@@ -151,6 +267,7 @@ async function handleCsvFileChange() {
   state.csvHeaders = parsed.headers;
   state.csvRows = parsed.rows;
   state.mapping = {};
+  state.importedJsonObjects = [];
 
   autoMapColumns();
   renderCsvPreview();
@@ -158,20 +275,31 @@ async function handleCsvFileChange() {
   setMessage("csvMapperMessage", `${state.csvRows.length} ligne(s) CSV chargée(s). Délimiteur détecté : ${parsed.delimiter === "\t" ? "tabulation" : parsed.delimiter}`, "success");
 }
 
+async function handleJsonFileChange() {
+  const file = $("jsonFile")?.files?.[0];
+  if (!file) return;
+  const text = await file.text();
+  const parsed = JSON.parse(text);
+  state.importedJsonObjects = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.results) ? parsed.results : [parsed]);
+  state.generatedObjects = state.importedJsonObjects;
+  state.csvRows = [];
+  state.csvHeaders = [];
+  renderCsvPreview();
+  renderMappingTable();
+  renderGeneratedPreview();
+  setMessage("csvMapperMessage", `${state.importedJsonObjects.length} objet(s) JSON chargé(s).`, "success");
+}
+
 function autoMapColumns() {
-  const targetColumns = new Set(state.existingColumns);
   state.csvHeaders.forEach((header) => {
     const exact = state.existingColumns.find((col) => col.toLowerCase() === header.toLowerCase());
     if (exact) {
       state.mapping[header] = exact;
       return;
     }
-
     const cleaned = header.toLowerCase().replaceAll(" ", "_").replaceAll("-", "_");
     const normalized = state.existingColumns.find((col) => col.toLowerCase() === cleaned);
-    if (normalized && targetColumns.has(normalized)) {
-      state.mapping[header] = normalized;
-    }
+    if (normalized) state.mapping[header] = normalized;
   });
 }
 
@@ -180,7 +308,9 @@ function renderCsvPreview() {
   if (!container) return;
 
   if (!state.csvRows.length) {
-    container.innerHTML = `<p class="hint">Aucun CSV chargé.</p>`;
+    container.innerHTML = state.importedJsonObjects.length
+      ? `<p class="hint">Source JSON chargée : pas de mapping CSV nécessaire.</p>`
+      : `<p class="hint">Aucun CSV chargé.</p>`;
     return;
   }
 
@@ -212,7 +342,9 @@ function renderMappingTable() {
   if (!container) return;
 
   if (!state.csvHeaders.length) {
-    container.innerHTML = `<p class="hint">Charge un CSV pour construire le mapping.</p>`;
+    container.innerHTML = state.importedJsonObjects.length
+      ? `<p class="hint">Import JSON chargé : mapping CSV non utilisé.</p>`
+      : `<p class="hint">Charge un CSV pour construire le mapping.</p>`;
     return;
   }
 
@@ -255,11 +387,16 @@ function parseCellValue(value) {
 }
 
 function buildGeneratedObjects() {
+  if (state.importedJsonObjects.length) {
+    state.generatedObjects = state.importedJsonObjects;
+    return;
+  }
+
   state.generatedObjects = state.csvRows.map((row) => {
     const obj = {};
     Object.entries(state.mapping).forEach(([csvColumn, targetColumn]) => {
       if (!targetColumn) return;
-      const value = parseCellValue(row[csvColumn]);
+      const value = technicalValue(targetColumn, row[csvColumn]);
       if (value !== "") obj[targetColumn] = value;
     });
     return obj;
@@ -270,6 +407,53 @@ function renderGeneratedPreview() {
   const output = $("csvGeneratedPreview");
   if (!output) return;
   output.textContent = JSON.stringify(state.generatedObjects.slice(0, 20), null, 2);
+}
+
+function toCsvValue(value) {
+  const text = String(value ?? "");
+  if (text.includes(";") || text.includes('"') || text.includes("\n")) {
+    return `"${text.replaceAll('"', '""')}"`;
+  }
+  return text;
+}
+
+function downloadText(fileName, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportCsvExample() {
+  if (!state.existingItems.length) throw new Error("Charge d'abord les éléments en base.");
+  const columns = state.existingColumns;
+  const lines = [columns.join(";")];
+  state.existingItems.forEach((item) => {
+    lines.push(columns.map((col) => toCsvValue(displayValue(col, item[col]))).join(";"));
+  });
+  downloadText(`${$("csvResourceSelect")?.value || "export"}_example.csv`, lines.join("\n"), "text/csv;charset=utf-8");
+}
+
+function exportJsonExample() {
+  if (!state.existingItems.length) throw new Error("Charge d'abord les éléments en base.");
+  const humanReadable = state.existingItems.map((item) => {
+    const obj = {};
+    state.existingColumns.forEach((col) => {
+      obj[col] = displayValue(col, item[col]);
+    });
+    return obj;
+  });
+  downloadText(`${$("csvResourceSelect")?.value || "export"}_example.json`, JSON.stringify(humanReadable, null, 2), "application/json;charset=utf-8");
+}
+
+function exportTechnicalJson() {
+  if (!state.existingItems.length) throw new Error("Charge d'abord les éléments en base.");
+  downloadText(`${$("csvResourceSelect")?.value || "export"}_technical.json`, JSON.stringify(state.existingItems, null, 2), "application/json;charset=utf-8");
 }
 
 function selectedKey() {
@@ -283,7 +467,9 @@ function excludedFields() {
 async function runCsvImport(dryRun) {
   const resource = $("csvResourceSelect")?.value;
   if (!resource) throw new Error("Ressource manquante.");
-  if (!state.generatedObjects.length) throw new Error("Aucune donnée générée. Vérifie le mapping.");
+
+  buildGeneratedObjects();
+  if (!state.generatedObjects.length) throw new Error("Aucune donnée générée. Vérifie le mapping ou le JSON importé.");
 
   const endpoint = dryRun ? "/api/import/dry-run" : "/api/import/apply";
 
@@ -304,7 +490,7 @@ async function runCsvImport(dryRun) {
 
   const output = $("csvImportResult");
   if (output) output.textContent = JSON.stringify(result, null, 2);
-  setMessage("csvMapperMessage", dryRun ? "Dry-run CSV terminé." : "Import CSV terminé.", result.ok ? "success" : "error");
+  setMessage("csvMapperMessage", dryRun ? "Dry-run terminé." : "Import terminé.", result.ok ? "success" : "error");
 }
 
 export function bindCsvMapperEvents() {
@@ -314,10 +500,20 @@ export function bindCsvMapperEvents() {
 
   $("csvLoadExistingBtn")?.addEventListener("click", () => loadExistingItems().catch((error) => setMessage("csvMapperMessage", error.message, "error")));
   $("csvFile")?.addEventListener("change", () => handleCsvFileChange().catch((error) => setMessage("csvMapperMessage", error.message, "error")));
+  $("jsonFile")?.addEventListener("change", () => handleJsonFileChange().catch((error) => setMessage("csvMapperMessage", error.message, "error")));
   $("csvBuildPreviewBtn")?.addEventListener("click", () => {
     buildGeneratedObjects();
     renderGeneratedPreview();
     setMessage("csvMapperMessage", `${state.generatedObjects.length} objet(s) généré(s).`, "success");
+  });
+  $("csvExportExampleBtn")?.addEventListener("click", () => {
+    try { exportCsvExample(); } catch (error) { setMessage("csvMapperMessage", error.message, "error"); }
+  });
+  $("jsonExportExampleBtn")?.addEventListener("click", () => {
+    try { exportJsonExample(); } catch (error) { setMessage("csvMapperMessage", error.message, "error"); }
+  });
+  $("jsonExportTechnicalBtn")?.addEventListener("click", () => {
+    try { exportTechnicalJson(); } catch (error) { setMessage("csvMapperMessage", error.message, "error"); }
   });
   $("csvDryRunBtn")?.addEventListener("click", () => runCsvImport(true).catch((error) => setMessage("csvMapperMessage", error.message, "error")));
   $("csvApplyBtn")?.addEventListener("click", () => runCsvImport(false).catch((error) => setMessage("csvMapperMessage", error.message, "error")));

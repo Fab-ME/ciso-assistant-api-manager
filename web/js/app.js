@@ -50,7 +50,6 @@ async function start() {
     await loadOptions();
   } catch (error) {
     console.error(error);
-    showStartupError(error);
   }
 }
 

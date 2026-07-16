@@ -335,3 +335,42 @@ Les folders correspondent aux domaines organisationnels et supportent une hiéra
 {
   "parent_folder": "<uuid>"
 }
+
+
+## CSV Mapper
+
+L'interface Web intègre une page **CSV Mapper** permettant de préparer des créations ou mises à jour d'objets CISO Assistant à partir d'un fichier CSV.
+
+### Principe
+
+1. Sélectionner la ressource cible CISO Assistant.
+2. Charger les éléments actuellement présents en base.
+3. Charger un fichier CSV.
+4. Mapper visuellement les colonnes CSV vers les champs attendus par l'API.
+5. Générer une prévisualisation JSON.
+6. Exécuter un dry-run.
+7. Lancer l'import réel.
+
+### Fonctionnalités
+
+- Chargement des ressources disponibles via `/api/resources`.
+- Chargement des objets existants via `/api/data?resource=<ressource>`.
+- Détection automatique du séparateur CSV (`;`, `,`, tabulation).
+- Mapping manuel des colonnes CSV vers les champs CISO Assistant.
+- Prévisualisation des objets JSON générés.
+- Import réutilisant le moteur existant :
+  - `/api/import/dry-run`
+  - `/api/import/apply`
+- Choix de la clé de rapprochement : `id` ou `ref_id`.
+- Support du mode strict pour limiter les champs envoyés en PATCH.
+
+### Fichiers concernés
+
+```text
+web/js/csv_mapper.js
+web/js/app.js
+web/index.html
+```
+
+> Le backend n'a pas besoin d'une nouvelle route spécifique : le CSV Mapper convertit le CSV en JSON côté navigateur puis réutilise le moteur d'import existant.
+

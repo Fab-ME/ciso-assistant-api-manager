@@ -19,6 +19,7 @@
     <button class="tab active" data-page="explorerPage">Data Explorer</button>
     <button class="tab" data-page="foldersPage">Folders</button>
     <button class="tab" data-page="rolesPage">Roles & Permissions</button>
+    <button class="tab" data-page="csvMapperPage">CSV Mapper</button>
   </nav>
 
   <main>
@@ -26,8 +27,7 @@
       <div class="layout">
         <section class="panel controls">
           <h2>Data Explorer</h2>
-          <label for="resourceSelect">Resource</label>
-          <select id="resourceSelect"></select>
+          <label for="resourceSelect">Resource</label><select id="resourceSelect"></select>
           <div class="grid two">
             <div><label for="statusFilter">Status</label><select id="statusFilter"><option value="">All statuses</option></select></div>
             <div><label for="searchFilter">API search</label><input id="searchFilter" placeholder="Search text" /></div>
@@ -36,103 +36,85 @@
             <div><label for="folderFilter">Folder</label><select id="folderFilter"><option value="">All folders</option></select></div>
             <div><label for="perimeterFilter">Perimeter</label><select id="perimeterFilter"><option value="">All perimeters</option></select></div>
           </div>
-          <label for="fieldsInput">Columns / export fields</label>
-          <input id="fieldsInput" placeholder="id,ref_id,name,status,folder" />
+          <label for="fieldsInput">Columns / export fields</label><input id="fieldsInput" placeholder="id,ref_id,name,status,folder" />
           <div class="grid two compact-grid">
             <div><label for="pageSizeSelect">Rows per page</label><select id="pageSizeSelect"><option>50</option><option selected>100</option><option>250</option><option>500</option></select></div>
             <div><label for="localSearch">Local table filter</label><input id="localSearch" placeholder="Filter loaded table" /></div>
           </div>
-          <details class="column-selectors">
-            <summary>Display and export columns</summary>
-            <h3>Display Columns</h3><div id="displayColumns" class="checkbox-list"></div>
-            <h3>Export Columns</h3><div id="exportColumns" class="checkbox-list"></div>
-          </details>
-          <div class="button-row">
-            <button id="loadBtn">Load Data</button>
-            <button id="exportBtn" class="secondary">Export Full Dataset</button>
-            <button id="exportFilteredBtn" class="secondary">Export Filtered Results</button>
-            <button id="refreshOptionsBtn" class="secondary soft">Refresh Lists</button>
-          </div>
+          <details class="column-selectors"><summary>Display and export columns</summary><h3>Display Columns</h3><div id="displayColumns" class="checkbox-list"></div><h3>Export Columns</h3><div id="exportColumns" class="checkbox-list"></div></details>
+          <div class="button-row"><button id="loadBtn">Load Data</button><button id="exportBtn" class="secondary">Export Full Dataset</button><button id="exportFilteredBtn" class="secondary">Export Filtered Results</button><button id="refreshOptionsBtn" class="secondary soft">Refresh Lists</button></div>
           <div id="exportResult" class="message"></div>
         </section>
+
         <section class="panel import-panel">
-          <h2>Import JSON</h2>
-          <p class="hint">Strict mode removes unchanged fields from PATCH payloads. Use dry-run first.</p>
+          <h2>Import JSON</h2><p class="hint">Strict mode removes unchanged fields from PATCH payloads. Use dry-run first.</p>
           <label for="importFile">JSON file</label><input id="importFile" type="file" accept=".json,application/json" />
-          <div class="grid two">
-            <div><label for="keySelect">Identification key</label><select id="keySelect"><option value="id">id</option><option value="ref_id">ref_id</option></select></div>
-            <div><label for="excludeInput">Exclude fields</label><input id="excludeInput" placeholder="folder,library,provider" /></div>
-          </div>
+          <div class="grid two"><div><label for="keySelect">Identification key</label><select id="keySelect"><option value="id">id</option><option value="ref_id">ref_id</option></select></div><div><label for="excludeInput">Exclude fields</label><input id="excludeInput" placeholder="folder,library,provider" /></div></div>
           <label class="checkbox-line"><input id="strictImport" type="checkbox" checked /> Strict import: send only changed fields on PATCH</label>
           <div class="button-row"><button id="dryRunBtn">Dry-run Import</button><button id="applyImportBtn" class="danger">Apply Import</button></div>
           <pre id="importResult" class="output"></pre>
         </section>
+
         <section class="panel results-panel">
-          <div class="results-header">
-            <div><h2>Results</h2><p id="resultSummary" class="hint">No data loaded yet.</p></div>
-            <div class="pagination-bar"><button id="prevPageBtn" class="secondary soft">Previous</button><span id="pageIndicator">Page 1 / 1</span><button id="nextPageBtn" class="secondary soft">Next</button></div>
-          </div>
+          <div class="results-header"><div><h2>Results</h2><p id="resultSummary" class="hint">No data loaded yet.</p></div><div class="pagination-bar"><button id="prevPageBtn" class="secondary soft">Previous</button><span id="pageIndicator">Page 1 / 1</span><button id="nextPageBtn" class="secondary soft">Next</button></div></div>
           <div class="table-wrap"><table id="dataTable"><thead></thead><tbody></tbody></table></div>
         </section>
       </div>
     </section>
 
     <section id="foldersPage" class="page">
-      <div class="single-layout">
-        <section class="panel">
-          <div class="results-header">
-            <div>
-              <h2>Folders</h2>
-              <p id="foldersCount" class="hint">Chargement non effectué.</p>
-            </div>
-            <div class="button-row">
-              <button id="refreshFoldersBtn" class="secondary soft">Refresh folders</button>
-            </div>
-          </div>
-          <p class="hint">Gestion de l'arborescence des folders CISO Assistant via le champ parent_folder.</p>
-          <label for="foldersSearch">Recherche</label>
-          <input id="foldersSearch" placeholder="Filtrer par nom, description, parent, type..." />
-          <div id="foldersMessage" class="message"></div>
-
-          <div id="folderEditorPanel" class="panel soft-panel" hidden>
-            <h3 id="folderEditorTitle">Modifier un folder</h3>
-            <div class="grid two">
-              <div><label for="folderName">Nom</label><input id="folderName" /></div>
-              <div><label for="folderParent">Parent</label><select id="folderParent"></select></div>
-            </div>
-            <label for="folderDescription">Description</label>
-            <textarea id="folderDescription"></textarea>
-            <div class="grid two">
-              <label class="checkbox-line"><input id="folderPublished" type="checkbox" /> Publié</label>
-              <label class="checkbox-line"><input id="folderCreateIamGroups" type="checkbox" /> Créer les groupes IAM</label>
-            </div>
-            <div class="button-row">
-              <button id="saveFolderBtn">Enregistrer</button>
-              <button id="cancelFolderEditBtn" class="secondary soft">Annuler</button>
-            </div>
-          </div>
-
-          <div class="grid two folder-grid">
-            <div>
-              <h3>Tableau</h3>
-              <div class="table-wrap medium">
-                <table id="foldersTable">
-                  <thead><tr><th>Nom</th><th>Description</th><th>Parent</th><th>Enfants</th><th>Type</th><th>Publié</th><th>Built-in</th><th>Action</th></tr></thead>
-                  <tbody></tbody>
-                </table>
-              </div>
-            </div>
-            <div>
-              <h3>Arborescence</h3>
-              <div id="foldersTree" class="tree-box"></div>
-            </div>
-          </div>
-        </section>
-      </div>
+      <div class="single-layout"><section class="panel"><div class="results-header"><div><h2>Folders</h2><p id="foldersCount" class="hint">Chargement non effectué.</p></div><div class="button-row"><button id="refreshFoldersBtn" class="secondary soft">Refresh folders</button></div></div><p class="hint">Gestion de l'arborescence des folders CISO Assistant via le champ parent_folder.</p><label for="foldersSearch">Recherche</label><input id="foldersSearch" placeholder="Filtrer par nom, description ou parent..." /><div id="foldersMessage" class="message"></div><div class="grid two folder-grid"><div><h3>Tableau</h3><div class="table-wrap medium"><table id="foldersTable"><thead><tr><th>Nom</th><th>Description</th><th>Parent</th></tr></thead><tbody></tbody></table></div></div><div><h3>Arborescence</h3><div id="foldersTree" class="tree-box"></div></div></div></section></div>
     </section>
 
     <section id="rolesPage" class="page">
-      <div class="single-layout"><section class="panel"><h2>Roles and permissions</h2><p class="hint">Page existante à conserver.</p><div id="rolesMessage" class="message"></div></section></div>
+      <div class="single-layout"><section class="panel"><h2>Roles and permissions</h2><p class="hint">Page de préparation pour la gestion des rôles et permissions.</p><div class="grid two"><div><label for="roleName">Role name</label><input id="roleName" placeholder="Example: GRC Contributor" /></div><div><label for="roleScope">Scope</label><input id="roleScope" placeholder="Global, folder, perimeter..." /></div></div><label for="rolePermissions">Permissions</label><textarea id="rolePermissions" placeholder="One permission per line"></textarea><div class="button-row"><button id="addRoleDraftBtn">Add draft line</button><button id="saveRolesBtn" class="secondary">Save roles</button></div><div id="rolesMessage" class="message"></div><div class="table-wrap medium"><table id="rolesTable"><thead><tr><th>Role</th><th>Scope</th><th>Permissions</th><th>Action</th></tr></thead><tbody></tbody></table></div></section></div>
+    </section>
+
+    <section id="csvMapperPage" class="page">
+      <div class="single-layout">
+        <section class="panel">
+          <h2>CSV Mapper</h2>
+          <p class="hint">Importer ou mettre à jour des éléments CISO Assistant à partir d'un CSV ou JSON, avec affichage lisible des références.</p>
+
+          <div class="grid two">
+            <div><label for="csvResourceSelect">Ressource cible</label><select id="csvResourceSelect"></select></div>
+            <div><label for="csvKeySelect">Clé de rapprochement</label><select id="csvKeySelect"><option value="id">id</option><option value="ref_id">ref_id</option></select></div>
+          </div>
+
+          <div class="grid two">
+            <div><label for="csvDelimiter">Délimiteur CSV</label><select id="csvDelimiter"><option value="auto">Auto</option><option value=";">Point-virgule ;</option><option value=",">Virgule ,</option><option value="\t">Tabulation</option></select></div>
+            <div><label for="csvExcludeInput">Champs à exclure</label><input id="csvExcludeInput" placeholder="folder,library,provider" /></div>
+          </div>
+
+          <label class="checkbox-line"><input id="csvStrictImport" type="checkbox" checked /> Strict import : envoyer uniquement les champs modifiés lors des PATCH</label>
+
+          <div class="button-row">
+            <button id="csvLoadExistingBtn">Charger les éléments en base</button>
+            <button id="csvExportExampleBtn" class="secondary soft">Exporter CSV exemple</button>
+            <button id="jsonExportExampleBtn" class="secondary soft">Exporter JSON lisible</button>
+            <button id="jsonExportTechnicalBtn" class="secondary soft">Exporter JSON technique</button>
+          </div>
+          <div id="csvMapperMessage" class="message"></div>
+
+          <h3>Éléments actuellement en base</h3><div id="csvExistingPreview"></div>
+
+          <h3>Import CSV</h3>
+          <label for="csvFile">Charger le fichier CSV</label><input id="csvFile" type="file" accept=".csv,text/csv" />
+          <div id="csvPreview"></div>
+
+          <h3>Import JSON</h3>
+          <p class="hint">Charge un JSON déjà structuré pour bypasser le mapping CSV.</p>
+          <label for="jsonFile">Charger le fichier JSON</label><input id="jsonFile" type="file" accept=".json,application/json" />
+
+          <h3>Mapping des colonnes CSV</h3><div class="table-wrap medium" id="csvMappingTable"></div>
+
+          <h3>Prévisualisation JSON générée</h3>
+          <div class="button-row"><button id="csvBuildPreviewBtn" class="secondary soft">Générer la prévisualisation</button><button id="csvDryRunBtn">Dry-run import</button><button id="csvApplyBtn" class="danger">Importer</button></div>
+          <pre id="csvGeneratedPreview" class="output"></pre>
+
+          <h3>Résultat de l'import</h3><pre id="csvImportResult" class="output"></pre>
+        </section>
+      </div>
     </section>
   </main>
 

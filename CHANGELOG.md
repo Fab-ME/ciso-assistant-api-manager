@@ -156,3 +156,28 @@ web/
 - Gestion propre des erreurs API CISO Assistant.
 - Suppression des ERR_EMPTY_RESPONSE.
 - Affichage détaillé des erreurs 401/403.
+
+## [1.3.0] - 2026-07-16
+
+### Ajouté
+
+- Ajout d'une page **CSV Mapper** dans l'interface Web.
+- Chargement d'un fichier CSV directement depuis le navigateur.
+- Détection automatique du séparateur CSV.
+- Mapping visuel des colonnes CSV vers les champs CISO Assistant.
+- Prévisualisation des objets JSON générés avant import.
+- Réutilisation du moteur d'import existant pour le dry-run et l'import réel.
+- Choix de la clé de rapprochement `id` ou `ref_id`.
+- Support du mode strict lors de l'import depuis CSV.
+
+### Modifié
+
+- Mise à jour de `app.js` pour initialiser la page CSV Mapper.
+- Mise à jour de `index.html` pour ajouter l'onglet et la section CSV Mapper.
+
+### Notes
+
+- Aucune nouvelle route backend dédiée n'est nécessaire.
+- Le CSV est converti en JSON côté navigateur puis transmis aux endpoints existants `/api/import/dry-run` et `/api/import/apply`.
+
+## [1.4.0]2 3### Ajouté4 5- Export CSV exemple.6- Export JSON exemple.7- Support de l'import JSON dans CSV Mapper.8- Sauvegarde et chargement des mappings.9- Résolution automatique des UID en noms lisibles.
