@@ -5,7 +5,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.8+-blue)
 ![License](https://img.shields.io/badge/license-MIT%20%2B%20Commercial%20Restriction-orange)
-![Version](https://img.shields.io/badge/version-1.0.0-green)
+![Version](https://img.shields.io/badge/version-2.0.0-green)
 ![Maintainer](https://img.shields.io/badge/maintainer-Fab--ME-blue)
 
 ---
@@ -258,6 +258,7 @@ ciso-assistant-api-manager/
 │   └── js/
 │       ├── api.js
 │       ├── app.js
+│       ├── csv_mapper.js
 │       ├── dom.js
 │       ├── folders.js
 │       ├── explorer.js
@@ -319,79 +320,108 @@ python ciso_web.py
 
 ---
 
-## Contribuer
+## Interface Web
 
-Les issues et pull requests sont les bienvenues pour les corrections de bugs et l'ajout de nouveaux endpoints.
-Pour toute contribution significative, ouvrir d'abord une issue pour en discuter.
+L'interface Web locale fournit une couche graphique au moteur API.
 
+### Modules disponibles
 
-# Gestion des Folders
+#### Data Explorer
 
-L'interface Web intègre désormais un gestionnaire complet des folders CISO Assistant.
+- consultation des ressources CISO Assistant
+- filtrage multicritère
+- recherche texte
+- tri des colonnes
+- pagination locale
+- sélection des colonnes visibles
+- export JSON des résultats
 
-Les folders correspondent aux domaines organisationnels et supportent une hiérarchie native via le champ :
+#### Folder Manager
 
-```json
-{
-  "parent_folder": "<uuid>"
-}
+- affichage automatique des folders
+- création de folders
+- modification des folders
+- gestion de la hiérarchie parent/enfant
+- résolution automatique des UUID vers les noms
 
+#### Role Manager
 
-## CSV Mapper
+- consultation des rôles
+- visualisation des permissions
+- préparation à l'édition des rôles
 
-L'interface Web intègre une page **CSV Mapper** permettant de préparer des créations ou mises à jour d'objets CISO Assistant à partir d'un fichier CSV.
+#### CSV Mapper
 
-### Principe
+Import massif de données à partir de fichiers CSV.
 
-1. Sélectionner la ressource cible CISO Assistant.
-2. Charger les éléments actuellement présents en base.
-3. Charger un fichier CSV.
-4. Mapper visuellement les colonnes CSV vers les champs attendus par l'API.
-5. Générer une prévisualisation JSON.
-6. Exécuter un dry-run.
-7. Lancer l'import réel.
+Fonctionnalités :
 
-### Fonctionnalités
+- détection automatique du séparateur
+- mapping visuel CSV → API
+- prévisualisation JSON
+- Dry Run
+- Import réel
+- mode Upsert
+- clé de rapprochement :
+  - id
+  - ref_id
+  - name
 
-- Chargement des ressources disponibles via `/api/resources`.
-- Chargement des objets existants via `/api/data?resource=<ressource>`.
-- Détection automatique du séparateur CSV (`;`, `,`, tabulation).
-- Mapping manuel des colonnes CSV vers les champs CISO Assistant.
-- Prévisualisation des objets JSON générés.
-- Import réutilisant le moteur existant :
-  - `/api/import/dry-run`
-  - `/api/import/apply`
-- Choix de la clé de rapprochement : `id` ou `ref_id`.
-- Support du mode strict pour limiter les champs envoyés en PATCH.
+#### Moteur de résolution
 
-### Fichiers concernés
+Les champs de référence suivants peuvent être automatiquement résolus :
 
-```text
-web/js/csv_mapper.js
-web/js/app.js
-web/index.html
-```
+- folder
+- owner
+- entity
+- team
+- perimeter
+- asset_class
 
-> Le backend n'a pas besoin d'une nouvelle route spécifique : le CSV Mapper convertit le CSV en JSON côté navigateur puis réutilise le moteur d'import existant.
-## Import CSV/JSON en mode création ou mise à jour
+Le moteur conserve les UID techniques nécessaires aux imports.
 
-Le moteur d'import fonctionne maintenant en **upsert** :
+---
 
-- si la clé sélectionnée existe déjà en base, l'objet est modifié avec `PATCH` ;
-- si la clé sélectionnée n'existe pas, l'objet est créé avec `POST` ;
-- si la clé est absente dans une ligne, la ligne est considérée comme une création.
+## Exports
 
-### Clés de rapprochement disponibles
+Deux types d'exports sont disponibles.
 
-- `id`
-- `ref_id`
-- `name`
+### Exports techniques
 
-Le sélecteur est disponible dans la page **CSV Mapper**.
+Destinés à être réimportés.
 
-### Résultat du dry-run ou de l'import
+Formats :
 
-Le résultat indique maintenant :
+- CSV technique
+- JSON technique
+
+Ces exports contiennent les UID attendus par l'API.
+
+### Exports lisibles
+
+Destinés à l'analyse et aux contrôles.
+
+Formats :
+
+- CSV lisible
+- JSON lisible
+
+Les UUID sont remplacés par les libellés métiers lorsque les correspondances sont disponibles.
+'
+---
+
+## Mode Upsert
+
+Le moteur d'import détecte automatiquement si un objet doit être créé ou mis à jour.
+
+Règles :
+
+- id trouvé → PATCH
+- ref_id trouvé → PATCH
+- name trouvé → PATCH
+- aucune correspondance → POST
+
+Résultat d'import :
 
 ```json
 {
@@ -400,38 +430,10 @@ Le résultat indique maintenant :
   "skipped": 1,
   "errors": 0
 }
-```
 
-### Fichiers concernés
+---
 
-```text
-ciso_web.py
-web/js/csv_mapper.js
-web/index.html
-```
+## Contribuer
 
-## CSV Mapper - option 1 : affichage lisible, exports importables techniques
-
-Le CSV Mapper applique maintenant la règle suivante :
-
-- à l'écran, les références comme `folder`, `owner`, `team`, `entity`, `perimeter` sont affichées avec des libellés lisibles quand les lookups sont disponibles ;
-- les exports destinés à l'import conservent les valeurs techniques attendues par l'API, notamment les UID ;
-- l'import CSV n'essaie plus de convertir les libellés en UID : il attend des valeurs techniques issues de l'export importable.
-
-### Boutons disponibles
-
-- **Exporter CSV technique importable** : export CSV avec UID, à utiliser comme base de réimport.
-- **Exporter CSV lisible** : export CSV avec libellés, uniquement pour lecture/contrôle.
-- **Exporter JSON technique importable** : export JSON brut pour réimport.
-- **Exporter JSON lisible** : export JSON avec libellés, uniquement pour lecture/contrôle.
-
-### Fichiers concernés
-
-```text
-web/js/csv_mapper.js
-web/js/app.js
-web/index.html
-ciso_web.py
-```
-
-`ciso_web.py` inclut aussi le correctif d'import upsert : `PATCH` si la clé existe, `POST` sinon.
+Les issues et pull requests sont les bienvenues pour les corrections de bugs et l'ajout de nouveaux endpoints.
+Pour toute contribution significative, ouvrir d'abord une issue pour en discuter.

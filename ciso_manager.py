@@ -151,6 +151,24 @@ KNOWN_ENDPOINTS = {
 }
 
 # ─────────────────────────────────────────────
+# ASSET TYPE NORMALIZATION
+# ─────────────────────────────────────────────
+
+ASSET_TYPE_EXPORT_MAP = {
+    "Primary": "PR",
+    "Support": "SP",
+}
+
+ASSET_TYPE_IMPORT_MAP = {
+    "PR": "PR",
+    "SP": "SP",
+    "Primary": "PR",
+    "Support": "SP",
+    "primary": "PR",
+    "support": "SP",
+}
+
+# ─────────────────────────────────────────────
 # RÉSOLUTION D'ENDPOINT
 # ─────────────────────────────────────────────
 def resolve_endpoint(resource: str) -> str:
@@ -285,9 +303,11 @@ def flatten_object(obj: dict) -> dict:
     for key, val in obj.items():
         if key in EXPORT_EXCLUDE_KEYS:
             continue
-        result[key] = _flatten_value(val)
+        exported = _flatten_value(val)
+        if key == "type":
+            exported = ASSET_TYPE_EXPORT_MAP.get(exported, exported)
+        result[key] = exported
     return result
-
 
 # ─────────────────────────────────────────────
 # OPTIONNEL : NORMALISATION ENUM
@@ -503,6 +523,10 @@ def build_payload(item, exclude_keys=None, resource=None):
             continue
 
         parsed = _parse_complex_field(val, key=key, resource=resource)
+
+        # Normalisation des types d'assets
+        if resource == "assets" and key == "type":
+            parsed = ASSET_TYPE_IMPORT_MAP.get(parsed, parsed)
 
         if parsed is None:
             continue

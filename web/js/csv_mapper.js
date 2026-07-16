@@ -3,8 +3,14 @@ import { api } from "./api.js";
 
 const state = {
   resources: [],
+  // Donnees techniques issues de ciso_web.py -> exportItems -> cm.flatten_object()
   existingItems: [],
+  // Donnees lisibles issues de ciso_web.py -> items -> display_object()
+  displayItems: [],
+  // Colonnes techniques : utilisees pour mapping et exports importables
   existingColumns: [],
+  // Colonnes ecran : utilisees uniquement pour la preview lisible
+  displayColumns: [],
   csvRows: [],
   csvHeaders: [],
   mapping: {},
@@ -28,9 +34,27 @@ const REFERENCE_FIELDS = {
   entities: "entities",
   perimeter: "perimeters",
   perimeters: "perimeters",
+  asset_class: "asset-class",
+  asset_classes: "asset-class",
+  library: "loaded-libraries",
+  loaded_library: "loaded-libraries",
+  stored_library: "stored-libraries",
   role: "roles",
   roles: "roles",
 };
+
+// Colonnes masquees uniquement dans la preview ecran.
+// Important : elles restent disponibles dans les exports techniques et dans le mapping.
+const HIDDEN_PREVIEW_COLUMNS = new Set([
+  "id",
+  "etag",
+  "created_at",
+  "updated_at",
+  "created_by",
+  "modified_by",
+  "repr",
+  "str",
+]);
 
 function csvElementsPresent() {
   return Boolean(document.getElementById("csvMapperPage"));
@@ -58,11 +82,9 @@ function getOptionLabel(resource, id) {
 // Affichage uniquement : remplace les UID par des libelles lisibles a l'ecran.
 function displayValue(fieldName, value) {
   if (value === null || value === undefined || value === "") return "";
-
   if (Array.isArray(value)) {
     return value.map((item) => displayValue(fieldName, item)).filter(Boolean).join(" | ");
   }
-
   if (typeof value === "object") {
     if (value.name || value.str || value.label || value.email || value.username) {
       return value.name || value.str || value.label || value.email || value.username;
@@ -73,17 +95,15 @@ function displayValue(fieldName, value) {
     }
     return JSON.stringify(value);
   }
-
   const resource = resourceForField(fieldName);
   if (resource && isUuidLike(value)) {
     return getOptionLabel(resource, value) || String(value);
   }
-
   return String(value);
 }
 
-// Valeur technique : conserve les UID et les structures attendues par l'API.
-// Important : l'import doit envoyer les valeurs techniques, pas les libelles affiches.
+// Valeur technique lors de la construction d'objets depuis CSV.
+// Aucune conversion libelle -> UID : le CSV importable doit contenir les valeurs API.
 function technicalValueFromInput(value) {
   const raw = String(value ?? "").trim();
   if (raw === "") return "";
@@ -91,6 +111,27 @@ function technicalValueFromInput(value) {
   if (raw.toLowerCase() === "false") return false;
   if (raw.toLowerCase() === "null") return null;
   return raw;
+}
+
+// Valeur technique lors de l'export CSV importable.
+// Evite le bug [object Object] et conserve les UID attendus par l'API.
+function exportValue(value) {
+  if (value === null || value === undefined) return "";
+
+  if (Array.isArray(value)) {
+    const normalized = value.map((item) => {
+      if (item && typeof item === "object" && item.id) return item.id;
+      return item;
+    });
+    return JSON.stringify(normalized);
+  }
+
+  if (typeof value === "object") {
+    if (value.id) return value.id;
+    return JSON.stringify(value);
+  }
+
+  return String(value);
 }
 
 function splitCsvLine(line, delimiter) {
@@ -154,14 +195,40 @@ function parseCsv(text) {
   return { headers, rows, delimiter: effectiveDelimiter };
 }
 
-function normalizeColumns(items) {
-  const preferred = ["id", "ref_id", "name", "description", "status", "folder", "parent_folder", "owner", "owners", "assignee"];
+function normalizeColumns(items, options = {}) {
+  const includeHidden = Boolean(options.includeHidden);
+  const preferred = [
+    "id",
+    "ref_id",
+    "name",
+    "description",
+    "status",
+    "folder",
+    "parent_folder",
+    "owner",
+    "owners",
+    "assignee",
+    "asset_class",
+    "perimeter",
+    "entity",
+    "category",
+  ];
+
   const keys = new Set();
-  items.slice(0, 100).forEach((item) => Object.keys(item || {}).forEach((key) => keys.add(key)));
-  const ordered = preferred.filter((key) => keys.has(key));
-  Array.from(keys).sort().forEach((key) => {
-    if (!ordered.includes(key)) ordered.push(key);
+
+  // Important : on scanne tout le dataset, pas seulement les 100 premiers elements.
+  // Sinon des champs comme owner, asset_class ou folder peuvent disparaitre du mapping.
+  items.forEach((item) => {
+    Object.keys(item || {}).forEach((key) => keys.add(key));
   });
+
+  const isVisible = (key) => includeHidden || !HIDDEN_PREVIEW_COLUMNS.has(key);
+  const ordered = preferred.filter((key) => keys.has(key) && isVisible(key));
+
+  Array.from(keys).sort().forEach((key) => {
+    if (!ordered.includes(key) && isVisible(key)) ordered.push(key);
+  });
+
   return ordered;
 }
 
@@ -198,9 +265,17 @@ async function loadExistingItems() {
 
   setMessage("csvMapperMessage", "Chargement des elements existants...", "");
   await refreshOptions();
+
   const data = await api(`/api/data?resource=${encodeURIComponent(resource)}`);
-  state.existingItems = data.exportItems || data.items || [];
-  state.existingColumns = normalizeColumns(state.existingItems);
+
+  // Separation stricte :
+  // - existingItems = technique / importable / exportable
+  // - displayItems = lisible / affichage uniquement
+  state.existingItems = data.exportItems || [];
+  state.displayItems = data.items || data.exportItems || [];
+  state.existingColumns = normalizeColumns(state.existingItems, { includeHidden: true });
+  state.displayColumns = normalizeColumns(state.displayItems, { includeHidden: false });
+
   renderExistingPreview();
   renderMappingTable();
   renderGeneratedPreview();
@@ -211,8 +286,8 @@ function renderExistingPreview() {
   const container = $("csvExistingPreview");
   if (!container) return;
 
-  const columns = state.existingColumns.slice(0, 10);
-  const rows = state.existingItems.slice(0, 10);
+  const columns = state.displayColumns.slice(0, 12);
+  const rows = state.displayItems.slice(0, 10);
 
   if (!rows.length) {
     container.innerHTML = `<p class="hint">Aucun element existant charge.</p>`;
@@ -235,14 +310,12 @@ function renderExistingPreview() {
 async function handleCsvFileChange() {
   const file = $("csvFile")?.files?.[0];
   if (!file) return;
-
   const text = await file.text();
   const parsed = parseCsv(text);
   state.csvHeaders = parsed.headers;
   state.csvRows = parsed.rows;
   state.mapping = {};
   state.importedJsonObjects = [];
-
   autoMapColumns();
   renderCsvPreview();
   renderMappingTable();
@@ -271,6 +344,7 @@ function autoMapColumns() {
       state.mapping[header] = exact;
       return;
     }
+
     const cleaned = header.toLowerCase().replaceAll(" ", "_").replaceAll("-", "_");
     const normalized = state.existingColumns.find((col) => col.toLowerCase() === cleaned);
     if (normalized) state.mapping[header] = normalized;
@@ -290,6 +364,7 @@ function renderCsvPreview() {
 
   const headers = state.csvHeaders;
   const rows = state.csvRows.slice(0, 10);
+
   container.innerHTML = `
     <div class="table-wrap medium">
       <table>
@@ -305,9 +380,11 @@ function renderCsvPreview() {
 function mappingSelectHtml(csvHeader) {
   const selected = state.mapping[csvHeader] || "";
   const options = [`<option value="">Ignorer</option>`];
+
   state.existingColumns.forEach((column) => {
     options.push(`<option value="${escapeAttribute(column)}" ${selected === column ? "selected" : ""}>${escapeHtml(column)}</option>`);
   });
+
   return `<select class="csv-map-select" data-csv="${escapeAttribute(csvHeader)}">${options.join("")}</select>`;
 }
 
@@ -357,8 +434,6 @@ function buildGeneratedObjects() {
     return;
   }
 
-  // Option 1 : aucune conversion libelle -> UID.
-  // Le CSV importable doit contenir les valeurs techniques attendues par l'API.
   state.generatedObjects = state.csvRows.map((row) => {
     const obj = {};
     Object.entries(state.mapping).forEach(([csvColumn, targetColumn]) => {
@@ -400,31 +475,40 @@ function exportCsvTechnical() {
   if (!state.existingItems.length) throw new Error("Charge d'abord les elements en base.");
   const columns = state.existingColumns;
   const lines = [columns.join(";")];
+
   state.existingItems.forEach((item) => {
-    lines.push(columns.map((col) => toCsvValue(item[col])).join(";"));
+    lines.push(columns.map((col) => toCsvValue(exportValue(item[col]))).join(";"));
   });
+
   downloadText(`${$("csvResourceSelect")?.value || "export"}_technical_importable.csv`, lines.join("\n"), "text/csv;charset=utf-8");
 }
 
 function exportCsvReadable() {
-  if (!state.existingItems.length) throw new Error("Charge d'abord les elements en base.");
-  const columns = state.existingColumns;
+  if (!state.displayItems.length && !state.existingItems.length) throw new Error("Charge d'abord les elements en base.");
+  const sourceItems = state.displayItems.length ? state.displayItems : state.existingItems;
+  const columns = state.displayColumns.length ? state.displayColumns : normalizeColumns(sourceItems, { includeHidden: false });
   const lines = [columns.join(";")];
-  state.existingItems.forEach((item) => {
+
+  sourceItems.forEach((item) => {
     lines.push(columns.map((col) => toCsvValue(displayValue(col, item[col]))).join(";"));
   });
+
   downloadText(`${$("csvResourceSelect")?.value || "export"}_readable.csv`, lines.join("\n"), "text/csv;charset=utf-8");
 }
 
 function exportJsonReadable() {
-  if (!state.existingItems.length) throw new Error("Charge d'abord les elements en base.");
-  const humanReadable = state.existingItems.map((item) => {
+  if (!state.displayItems.length && !state.existingItems.length) throw new Error("Charge d'abord les elements en base.");
+  const sourceItems = state.displayItems.length ? state.displayItems : state.existingItems;
+  const columns = state.displayColumns.length ? state.displayColumns : normalizeColumns(sourceItems, { includeHidden: false });
+
+  const humanReadable = sourceItems.map((item) => {
     const obj = {};
-    state.existingColumns.forEach((col) => {
+    columns.forEach((col) => {
       obj[col] = displayValue(col, item[col]);
     });
     return obj;
   });
+
   downloadText(`${$("csvResourceSelect")?.value || "export"}_readable.json`, JSON.stringify(humanReadable, null, 2), "application/json;charset=utf-8");
 }
 
@@ -449,7 +533,6 @@ async function runCsvImport(dryRun) {
   if (!state.generatedObjects.length) throw new Error("Aucune donnee generee. Verifie le mapping ou le JSON importe.");
 
   const endpoint = dryRun ? "/api/import/dry-run" : "/api/import/apply";
-
   if (!dryRun && !confirm("Tu vas appliquer les modifications dans CISO Assistant. Continuer ?")) return;
 
   const payload = {
@@ -478,23 +561,29 @@ export function bindCsvMapperEvents() {
   $("csvLoadExistingBtn")?.addEventListener("click", () => loadExistingItems().catch((error) => setMessage("csvMapperMessage", error.message, "error")));
   $("csvFile")?.addEventListener("change", () => handleCsvFileChange().catch((error) => setMessage("csvMapperMessage", error.message, "error")));
   $("jsonFile")?.addEventListener("change", () => handleJsonFileChange().catch((error) => setMessage("csvMapperMessage", error.message, "error")));
+
   $("csvBuildPreviewBtn")?.addEventListener("click", () => {
     buildGeneratedObjects();
     renderGeneratedPreview();
     setMessage("csvMapperMessage", `${state.generatedObjects.length} objet(s) genere(s).`, "success");
   });
+
   $("csvExportTechnicalBtn")?.addEventListener("click", () => {
     try { exportCsvTechnical(); } catch (error) { setMessage("csvMapperMessage", error.message, "error"); }
   });
+
   $("csvExportReadableBtn")?.addEventListener("click", () => {
     try { exportCsvReadable(); } catch (error) { setMessage("csvMapperMessage", error.message, "error"); }
   });
+
   $("jsonExportReadableBtn")?.addEventListener("click", () => {
     try { exportJsonReadable(); } catch (error) { setMessage("csvMapperMessage", error.message, "error"); }
   });
+
   $("jsonExportTechnicalBtn")?.addEventListener("click", () => {
     try { exportJsonTechnical(); } catch (error) { setMessage("csvMapperMessage", error.message, "error"); }
   });
+
   $("csvDryRunBtn")?.addEventListener("click", () => runCsvImport(true).catch((error) => setMessage("csvMapperMessage", error.message, "error")));
   $("csvApplyBtn")?.addEventListener("click", () => runCsvImport(false).catch((error) => setMessage("csvMapperMessage", error.message, "error")));
 }

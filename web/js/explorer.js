@@ -2,7 +2,13 @@ import { state } from "./state.js";
 import { $, fillSelect, setMessage, escapeHtml } from "./dom.js";
 import { api } from "./api.js";
 import { normalizeColumns, downloadJson } from "./utils.js";
-import { buildRows, ensureColumnSelectionDefaults, getFilteredRows, renderColumnSelectors, renderTable } from "./table.js";
+import {
+  buildRows,
+  ensureColumnSelectionDefaults,
+  getFilteredRows,
+  renderColumnSelectors,
+  renderTable,
+} from "./table.js";
 
 function selectedResource() {
   return $("resourceSelect").value;
@@ -17,17 +23,19 @@ function fieldsArray() {
 export async function loadHealth() {
   const data = await api("/api/health");
   $("health").innerHTML = `
-    <strong>${escapeHtml(data.app)} v${escapeHtml(data.version || "")}</strong><br>
+    ${escapeHtml(data.app)} v${escapeHtml(data.version || "")}<br>
     API: ${escapeHtml(data.baseUrl)}<br>
     Token: ${data.tokenConfigured ? "configured" : "missing"} - SSL verify: ${data.verifySsl ? "enabled" : "disabled"}<br>
-    Cache TTL: ${escapeHtml(data.cacheTtlSeconds)}s
+    Cache TTL: ${escapeHtml(data.cacheTtlSeconds || "n/a")}s
   `;
 }
 
 export async function loadResources() {
   const data = await api("/api/resources");
   const select = $("resourceSelect");
-  select.innerHTML = data.resources.map((resource) => `<option value="${escapeHtml(resource)}">${escapeHtml(resource)}</option>`).join("");
+  select.innerHTML = data.resources.map((resource) =>
+    `<option value="${escapeHtml(resource)}">${escapeHtml(resource)}</option>`
+  ).join("");
 }
 
 export async function loadOptions(force = false) {
@@ -35,6 +43,7 @@ export async function loadOptions(force = false) {
   const params = new URLSearchParams();
   if (resource) params.set("resource", resource);
   if (force) params.set("force", "true");
+
   const data = await api(`/api/options?${params.toString()}`);
   state.options = data.options || {};
   fillSelect("statusFilter", state.options.statuses, "All statuses");
@@ -44,12 +53,14 @@ export async function loadOptions(force = false) {
 
 export async function loadData() {
   setMessage("exportResult", "");
+
   const params = new URLSearchParams({ resource: selectedResource() });
   const status = $("statusFilter").value.trim();
   const search = $("searchFilter").value.trim();
   const folder = $("folderFilter").value.trim();
   const perimeter = $("perimeterFilter").value.trim();
   const fields = fieldsArray().join(",");
+
   if (status) params.set("status", status);
   if (search) params.set("search", search);
   if (folder) params.set("folder", folder);
@@ -57,11 +68,17 @@ export async function loadData() {
   if (fields) params.set("fields", fields);
 
   $("resultSummary").textContent = "Loading...";
+
   const data = await api(`/api/data?${params.toString()}`);
+
+  // items = affichage lisible, exportItems = donnees techniques importables.
   state.items = data.items || [];
   state.exportItems = data.exportItems || data.items || [];
   state.rows = buildRows(state.items, state.exportItems);
-  state.columns = normalizeColumns(state.items);
+
+  // Les colonnes viennent de la verite technique pour ne pas perdre de champs API.
+  state.columns = normalizeColumns(state.exportItems);
+
   state.page = 1;
   state.sort = { column: null, direction: "asc" };
   ensureColumnSelectionDefaults();
@@ -78,6 +95,7 @@ export async function exportFullDataset() {
     folder: $("folderFilter").value.trim(),
     perimeter: $("perimeterFilter").value.trim(),
   };
+
   const data = await api("/api/export", { method: "POST", body: JSON.stringify(body) });
   setMessage("exportResult", `Export completed: ${data.count} records. <a href="${data.downloadUrl}">Download ${escapeHtml(data.file)}</a>`, "success");
 }

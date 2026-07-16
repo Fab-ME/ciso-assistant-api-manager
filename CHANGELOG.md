@@ -67,165 +67,84 @@ Première release publique.
 - Exclusion automatique des métadonnées non ré-importables (`created_at`, `updated_at`, `str`, `repr`…)
 
 ---
+## [2.0.0] - 2026-07-16
 
-## [1.2.0] - 2026-07-16
+### 🚀 Nouveau
 
-### Ajouté
+#### Interface Web complète
 
-#### Interface Web
-- Nouvelle architecture modulaire JavaScript.
-- Découpage du fichier app.js en plusieurs modules :
-  - api.js
-  - app.js
-  - dom.js
-  - explorer.js
-  - imports.js
-  - table.js
-  - state.js
-  - utils.js
-  - domains.js
-  - roles.js
+- Ajout d'une interface Web locale basée sur ciso_web.py.
+- Navigation et visualisation des ressources CISO Assistant.
+- Recherche locale.
+- Pagination.
+- Tri dynamique des colonnes.
+- Sélection des colonnes visibles.
+- Sélection des colonnes exportées.
+- Résolution automatique UUID → libellés métiers.
 
-#### Gestion des données
-- Tri dynamique sur toutes les colonnes.
-- Pagination locale.
-- Cache local de recherche pour améliorer les performances.
-- Gestion avancée des colonnes affichées.
-- Gestion avancée des colonnes exportées.
+#### Gestion des folders
 
-#### Nouvelles pages
-- Ajout d'une page "Domains organisation".
-- Ajout d'une page "Roles and permissions".
-- Préparation des futures opérations CRUD sur les domaines.
-- Préparation des futures opérations CRUD sur les rôles et permissions.
-
-#### Backend Web
-- Refonte du serveur ciso_web.py.
-- Ajout d'un cache TTL pour les référentiels.
-- Amélioration de la résolution UUID → libellés.
-- Ajout des routes :
-  - /api/domains/save
-  - /api/roles/save
-
-### Corrigé
-
-#### Export
-- Correction d'un problème d'export JSON filtré pouvant exporter un objet incorrect après application de filtres.
-
-#### Interface
-- Correction de plusieurs problèmes CSS.
-- Correction de la gestion des colonnes visibles.
-- Correction de la gestion des colonnes exportées.
-
-#### Performance
-- Réduction des recalculs JSON.stringify()
-- Optimisation du rendu des grands tableaux.
-
-### Modifié
-
-#### Structure du projet
-
-Ancien :
-
-text
-web/
-├── index.html
-├── app.js
-└── style.css
-
----
-
-## [1.2.1] - 2026-07-16
-
-### Ajouté
-
-- Gestionnaire de folders.
+- Page dédiée à la gestion des folders.
 - Chargement automatique des folders.
-- Affichage hiérarchique des folders.
+- Affichage hiérarchique.
+- Modification du parent_folder.
 - Endpoint GET /api/folders.
 - Endpoint POST /api/folders/save.
-- Résolution automatique parent_folder → nom du parent.
-- Calcul du nombre d'enfants.
 
-### Modifié
+#### CSV Mapper
 
-- Remplacement de la page Domains par une page Folders.
-- Ajout d'un éditeur de parent_folder.
-- Réorganisation de l'interface Web.
+- Import de fichiers CSV.
+- Détection automatique du séparateur.
+- Mapping visuel CSV → API.
+- Prévisualisation JSON.
+- Dry-run avant import.
+- Import réel depuis l'interface.
+- Support JSON natif.
+- Clés de rapprochement :
+  - id
+  - ref_id
+  - name
 
-### Corrigé
+#### Import avancé
 
-- Gestion propre des erreurs API CISO Assistant.
-- Suppression des ERR_EMPTY_RESPONSE.
-- Affichage détaillé des erreurs 401/403.
+- Logique d'upsert complète.
+- PATCH si l'objet existe.
+- POST si l'objet n'existe pas.
+- Comptage :
+  - created
+  - updated
+  - skipped
+  - errors
 
-## [1.3.0] - 2026-07-16
-
-### Ajouté
-
-- Ajout d'une page **CSV Mapper** dans l'interface Web.
-- Chargement d'un fichier CSV directement depuis le navigateur.
-- Détection automatique du séparateur CSV.
-- Mapping visuel des colonnes CSV vers les champs CISO Assistant.
-- Prévisualisation des objets JSON générés avant import.
-- Réutilisation du moteur d'import existant pour le dry-run et l'import réel.
-- Choix de la clé de rapprochement `id` ou `ref_id`.
-- Support du mode strict lors de l'import depuis CSV.
-
-### Modifié
-
-- Mise à jour de `app.js` pour initialiser la page CSV Mapper.
-- Mise à jour de `index.html` pour ajouter l'onglet et la section CSV Mapper.
-
-### Notes
-
-- Aucune nouvelle route backend dédiée n'est nécessaire.
-- Le CSV est converti en JSON côté navigateur puis transmis aux endpoints existants `/api/import/dry-run` et `/api/import/apply`.
-
-## [1.4.0]
-
-### Ajouté
-
-- Export CSV exemple.
-- Export JSON exemple.
-- Support de l'import JSON dans CSV Mapper.
-- Sauvegarde et chargement des mappings.
-- Résolution automatique des UID en noms lisibles.
-
----
-
-## [1.4.1] - 2026-07-16
-
-### Corrigé
-
-- Correction de l'import CSV/JSON pour gérer réellement la création et la modification.
-- Le moteur d'import applique maintenant une logique d'upsert : `PATCH` si l'objet existe, `POST` sinon.
-
-### Ajouté
-
-- Comptage des créations, modifications, lignes ignorées et erreurs dans le résultat d'import.
-- Support d'une clé de rapprochement plus souple : `id`, `ref_id` ou `name`.
-
-### Modifié
-
-- Mise à jour de `ciso_web.py` pour construire un index de rapprochement sur la clé choisie.
-- Mise à jour de `index.html` pour ajouter `name` dans les clés de rapprochement du CSV Mapper.
-
-## [1.4.2] - 2026-07-16
-
-### Corrigé
-
-- Correction du flux export/import CSV : les exports importables conservent désormais les UID techniques.
-- Suppression de la conversion automatique libellé -> UID à l'import CSV pour éviter les erreurs API 400 sur les champs relationnels comme `folder`.
-
-### Ajouté
+#### Exports
 
 - Export CSV technique importable.
-- Export CSV lisible pour contrôle humain.
+- Export CSV lisible.
 - Export JSON technique importable.
-- Export JSON lisible pour contrôle humain.
+- Export JSON lisible.
 
-### Modifié
+### 🔧 Améliorations
 
-- Les libellés lisibles sont réservés à l'affichage écran et aux exports explicitement marqués lisibles.
-- Le CSV à réimporter doit provenir de l'export CSV technique importable ou contenir les UID attendus par l'API.
+- Refonte complète de ciso_web.py.
+- Gestion robuste des erreurs API.
+- Suppression des erreurs ERR_EMPTY_RESPONSE.
+- Amélioration de la résolution des objets liés.
+- Cache intelligent des référentiels.
+- Architecture JavaScript modulaire.
+
+### 🐞 Correctifs
+
+- Correction du flux export/import CSV.
+- Correction des imports de relations utilisant des UID.
+- Correction des exports pouvant produire des valeurs non réimportables.
+- Corrections CSS et affichage des tableaux.
+- Amélioration des performances de rendu.
+
+### 💥 Breaking Changes
+
+- Introduction d'une interface Web complète.
+- Nouvelle structure du projet.
+- Les exports destinés à l'import utilisent désormais les valeurs techniques API.
+- Les exports lisibles sont réservés à la consultation humaine.
+
+---
