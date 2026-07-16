@@ -1,17 +1,13 @@
 #!/usr/bin/env python3
 """
-CISO Assistant API Manager - Local Web UI v1.1
+CISO Assistant API Manager - Local Web UI v1.2
 
-Enhancements in v1.1:
-- Friendly display labels for common UUID references such as folders, perimeters,
-  entities, users, teams, frameworks and libraries.
-- Live option loading from CISO Assistant to populate dropdown filters.
-- Strict import mode: for PATCH operations, unchanged fields are removed from the
-  payload so imports are limited to what is strictly necessary.
+Objectif : interface locale pour lire, filtrer, exporter et importer les donnees
+CISO Assistant. Le serveur est volontairement limite a un usage local.
 
-Usage:
-    python ciso_web.py
-    python ciso_web.py --host 127.0.0.1 --port 8080
+Usage :
+  python ciso_web.py
+  python ciso_web.py --host 127.0.0.1 --port 8080
 """
 
 import argparse
@@ -22,7 +18,7 @@ import sys
 import traceback
 import urllib.parse
 import webbrowser
-from datetime import datetime
+from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -35,7 +31,8 @@ except Exception as exc:
     sys.exit(1)
 
 APP_NAME = "CISO Assistant API Manager Web UI"
-APP_VERSION = "1.1"
+APP_VERSION = "1.2"
+
 ROOT_DIR = Path(__file__).resolve().parent
 WEB_DIR = ROOT_DIR / "web"
 EXPORT_DIR = ROOT_DIR / "exports"
@@ -45,7 +42,6 @@ LOG_DIR = ROOT_DIR / "logs"
 for directory in (WEB_DIR, EXPORT_DIR, IMPORT_DIR, LOG_DIR):
     directory.mkdir(exist_ok=True)
 
-# Reference resources used to translate UUIDs into readable labels.
 REFERENCE_RESOURCES = {
     "folder": "folders",
     "folders": "folders",
@@ -54,6 +50,7 @@ REFERENCE_RESOURCES = {
     "entity": "entities",
     "entities": "entities",
     "owner": "users",
+    "owners": "users",
     "assignee": "users",
     "user": "users",
     "users": "users",
@@ -67,13 +64,14 @@ REFERENCE_RESOURCES = {
     "stored_library": "stored-libraries",
 }
 
-# Cache format: {resource: {uuid: label}}
-LOOKUP_CACHE = {}
-
 COMMON_STATUS_VALUES = [
     "active", "inactive", "draft", "in_progress", "deprecated", "archived",
     "to_do", "done", "not_started", "completed", "approved", "rejected",
 ]
+
+# cache format: {resource: {expires_at: datetime, data: {uuid: label}}}
+LOOKUP_CACHE = {}
+CACHE_TTL_SECONDS = int(os.getenv("CISO_LOOKUP_CACHE_TTL", "300"))
 
 
 def now_stamp():
@@ -81,11 +79,7 @@ def now_stamp():
 
 
 def log_event(action, **details):
-    entry = {
-        "timestamp": datetime.now().isoformat(timespec="seconds"),
-        "action": action,
-        **details,
-    }
+    entry = {"timestamp": datetime.now().isoformat(timespec="seconds"), "action": action, **details}
     with (LOG_DIR / "ciso_web.log").open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
@@ -101,6 +95,7 @@ def token_configured():
 
 
 def verify_ssl_enabled():
+    # Projet local : on conserve le comportement existant. Pas de changement impose.
     raw = os.getenv("CISO_VERIFY_SSL")
     if raw is None:
         return bool(getattr(cm, "VERIFY_SSL", False))
@@ -118,6 +113,12 @@ def safe_file_name(name):
     name = os.path.basename(name or "download.json")
     allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
     return "".join(ch if ch in allowed else "_" for ch in name)
+
+
+def parse_json_body(handler):
+    length = int(handler.headers.get("Content-Length", "0"))
+    raw = handler.rfile.read(length).decode("utf-8") if length else "{}"
+    return json.loads(raw or "{}")
 
 
 def parse_records(payload):
@@ -140,6 +141,13 @@ def label_from_object(obj):
     return json.dumps(obj, ensure_ascii=False)
 
 
+def looks_like_uuid(value):
+    if value is None:
+        return False
+    value = str(value)
+    return len(value) >= 32 and value.count("-") >= 4
+
+
 def flatten_export(item):
     try:
         return cm.flatten_object(item)
@@ -148,11 +156,13 @@ def flatten_export(item):
 
 
 def get_lookup(resource, force=False):
-    """Return UUID -> label map for a reference resource."""
     if not resource:
         return {}
-    if resource in LOOKUP_CACHE and not force:
-        return LOOKUP_CACHE[resource]
+
+    cached = LOOKUP_CACHE.get(resource)
+    if cached and not force and cached["expires_at"] > datetime.now():
+        return cached["data"]
+
     try:
         items = cm.paginate_all(full_url(resource), params={"page_size": 500})
         mapping = {}
@@ -162,10 +172,14 @@ def get_lookup(resource, force=False):
             uid = item.get("id")
             if uid:
                 mapping[str(uid)] = label_from_object(item)
-        LOOKUP_CACHE[resource] = mapping
+        LOOKUP_CACHE[resource] = {
+            "expires_at": datetime.now() + timedelta(seconds=CACHE_TTL_SECONDS),
+            "data": mapping,
+        }
         return mapping
-    except Exception:
-        LOOKUP_CACHE[resource] = {}
+    except Exception as exc:
+        log_event("lookup_error", resource=resource, error=str(exc))
+        LOOKUP_CACHE[resource] = {"expires_at": datetime.now(), "data": {}}
         return {}
 
 
@@ -177,25 +191,21 @@ def lookup_label(field_name, uuid_value):
 
     if name in REFERENCE_RESOURCES:
         candidates.append(REFERENCE_RESOURCES[name])
-    else:
-        # Heuristics for common fields: folder_id, perimeter, owner_id, etc.
-        clean = name.replace("_id", "")
-        if clean in REFERENCE_RESOURCES:
-            candidates.append(REFERENCE_RESOURCES[clean])
-        for key, resource in REFERENCE_RESOURCES.items():
-            if key in clean:
-                candidates.append(resource)
+    if name.endswith("_id"):
+        base = name[:-3]
+        if base in REFERENCE_RESOURCES:
+            candidates.append(REFERENCE_RESOURCES[base])
+    if name.endswith("s") and name[:-1] in REFERENCE_RESOURCES:
+        candidates.append(REFERENCE_RESOURCES[name[:-1]])
 
     for resource in dict.fromkeys(candidates):
         mapping = get_lookup(resource)
-        label = mapping.get(str(uuid_value))
-        if label:
-            return label
+        if str(uuid_value) in mapping:
+            return mapping[str(uuid_value)]
     return str(uuid_value)
 
 
 def display_value(key, value):
-    """Value used for table display: readable labels instead of raw technical objects."""
     if value is None:
         return ""
     if isinstance(value, dict):
@@ -222,14 +232,7 @@ def display_value(key, value):
     return value
 
 
-def looks_like_uuid(value):
-    if not isinstance(value, str):
-        value = str(value)
-    return len(value) >= 32 and value.count("-") >= 4
-
-
 def display_object(item):
-    """Build a user-friendly item for table rendering."""
     out = {}
     for key, value in item.items():
         if key in ("created_at", "updated_at", "id", "ref_id", "name", "status", "category"):
@@ -245,9 +248,7 @@ def build_payload(item, exclude_keys=None, resource=None):
     exclude = set(exclude_keys or []) | {"id"}
     payload = {}
     for key, value in item.items():
-        if key in exclude:
-            continue
-        if value is None:
+        if key in exclude or value is None:
             continue
         if isinstance(value, str) and value.strip() == "":
             continue
@@ -256,7 +257,6 @@ def build_payload(item, exclude_keys=None, resource=None):
 
 
 def canonical(value):
-    """Comparable representation for strict import diff."""
     if isinstance(value, dict):
         if "id" in value and len(value) <= 3:
             return value.get("id")
@@ -279,19 +279,18 @@ def fetch_existing_flat(url, uuid):
 
 
 def strict_payload(url, uuid, payload):
-    """Remove unchanged fields from PATCH payload."""
-    existing_flat, existing_raw = fetch_existing_flat(url, uuid)
+    existing_flat, _ = fetch_existing_flat(url, uuid)
     if existing_flat is None:
         return payload, {"compared": False, "removed": [], "reason": "existing object could not be read"}
 
-    filtered = {}
+    cleaned = {}
     removed = []
     for key, value in payload.items():
         if key in existing_flat and values_equal(existing_flat.get(key), value):
             removed.append(key)
         else:
-            filtered[key] = value
-    return filtered, {"compared": True, "removed": removed}
+            cleaned[key] = value
+    return cleaned, {"compared": True, "removed": removed}
 
 
 def build_options_for_ui(resource=None):
@@ -300,61 +299,49 @@ def build_options_for_ui(resource=None):
     entities = get_lookup("entities")
     teams = get_lookup("teams")
     users = get_lookup("users")
-
-    status_values = list(COMMON_STATUS_VALUES)
-    if resource:
-        try:
-            sample = cm.paginate_all(full_url(resource), params={"page_size": 200})
-            discovered = sorted({str(x.get("status")) for x in sample if isinstance(x, dict) and x.get("status")})
-            status_values = sorted(set(status_values + discovered))
-        except Exception:
-            pass
-
-    def to_options(mapping):
-        return [{"id": uid, "label": label} for uid, label in sorted(mapping.items(), key=lambda x: x[1].lower())]
-
     return {
-        "folders": to_options(folders),
-        "perimeters": to_options(perimeters),
-        "entities": to_options(entities),
-        "teams": to_options(teams),
-        "users": to_options(users),
-        "statuses": status_values,
+        "statuses": COMMON_STATUS_VALUES,
+        "folders": [{"id": k, "label": v} for k, v in sorted(folders.items(), key=lambda x: x[1].lower())],
+        "perimeters": [{"id": k, "label": v} for k, v in sorted(perimeters.items(), key=lambda x: x[1].lower())],
+        "entities": [{"id": k, "label": v} for k, v in sorted(entities.items(), key=lambda x: x[1].lower())],
+        "teams": [{"id": k, "label": v} for k, v in sorted(teams.items(), key=lambda x: x[1].lower())],
+        "users": [{"id": k, "label": v} for k, v in sorted(users.items(), key=lambda x: x[1].lower())],
     }
 
 
 class CisoWebHandler(BaseHTTPRequestHandler):
-    server_version = "CisoWebUI/1.1"
+    server_version = "CisoWebUI/1.2"
 
-    def log_message(self, fmt, *args):
-        return
+    def log_message(self, format, *args):
+        log_event("http", client=self.client_address[0], message=format % args)
 
-    def send_json(self, data, status=200):
-        raw = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+    def send_json(self, payload, status=200):
+        raw = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
 
-    def send_text(self, text, status=200):
-        raw = text.encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
+    def send_error_json(self, message, status=500, details=None):
+        self.send_json({"ok": False, "error": message, "details": details}, status=status)
+
+    def serve_static(self):
+        requested = urllib.parse.urlparse(self.path).path
+        if requested == "/":
+            requested = "/web/index.html"
+        requested = requested.lstrip("/")
+        target = (ROOT_DIR / requested).resolve()
+        if not str(target).startswith(str(ROOT_DIR.resolve())) or not target.exists() or not target.is_file():
+            self.send_error_json("Not found", status=404)
+            return
+        content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        raw = target.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
-
-    def read_json(self):
-        length = int(self.headers.get("Content-Length", "0") or "0")
-        if length <= 0:
-            return {}
-        raw = self.rfile.read(length).decode("utf-8")
-        return json.loads(raw) if raw.strip() else {}
-
-    def handle_error(self, exc):
-        log_event("error", path=self.path, error=str(exc), traceback=traceback.format_exc())
-        self.send_json({"ok": False, "error": str(exc)}, status=500)
 
     def do_GET(self):
         try:
@@ -362,292 +349,163 @@ class CisoWebHandler(BaseHTTPRequestHandler):
             path = parsed.path
             query = urllib.parse.parse_qs(parsed.query)
 
-            if path == "/":
-                return self.serve_file(WEB_DIR / "index.html")
-            if path.startswith("/web/"):
-                relative = path.replace("/web/", "", 1)
-                return self.serve_file(WEB_DIR / relative)
             if path == "/api/health":
-                return self.api_health()
-            if path == "/api/resources":
-                return self.api_resources()
-            if path == "/api/options":
-                return self.api_options(query)
-            if path == "/api/data":
-                return self.api_data(query)
-            if path == "/api/download":
-                return self.api_download(query)
+                self.send_json({
+                    "ok": True,
+                    "app": APP_NAME,
+                    "version": APP_VERSION,
+                    "baseUrl": base_url(),
+                    "tokenConfigured": token_configured(),
+                    "verifySsl": verify_ssl_enabled(),
+                    "cacheTtlSeconds": CACHE_TTL_SECONDS,
+                })
+                return
 
-            self.send_text("Not found", status=404)
+            if path == "/api/resources":
+                self.send_json({"ok": True, "resources": sorted(cm.KNOWN_ENDPOINTS.keys())})
+                return
+
+            if path == "/api/options":
+                resource = query.get("resource", [None])[0]
+                force = query.get("force", ["false"])[0].lower() == "true"
+                if force:
+                    LOOKUP_CACHE.clear()
+                self.send_json({"ok": True, "options": build_options_for_ui(resource)})
+                return
+
+            if path == "/api/data":
+                resource = query.get("resource", [""])[0]
+                if not resource:
+                    self.send_error_json("Missing resource", status=400)
+                    return
+                params = {}
+                for key in ("status", "search", "folder", "perimeter"):
+                    value = query.get(key, [""])[0].strip()
+                    if value:
+                        params[key] = value
+                fields = [f.strip() for f in query.get("fields", [""])[0].split(",") if f.strip()]
+                raw_items = cm.paginate_all(full_url(resource), params=params or None)
+                export_items = [flatten_export(item) for item in raw_items]
+                display_items = [display_object(item) for item in export_items]
+                if fields:
+                    def select_fields(item):
+                        return {k: item.get(k) for k in fields if k in item}
+                    display_items = [select_fields(item) for item in display_items]
+                    export_items = [select_fields(item) for item in export_items]
+                self.send_json({"ok": True, "items": display_items, "exportItems": export_items, "count": len(display_items)})
+                return
+
+            if path.startswith("/exports/"):
+                self.serve_static()
+                return
+
+            self.serve_static()
+        except SystemExit:
+            raise
         except Exception as exc:
-            self.handle_error(exc)
+            self.send_error_json(str(exc), details=traceback.format_exc())
 
     def do_POST(self):
         try:
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
+            body = parse_json_body(self)
 
             if path == "/api/export":
-                return self.api_export()
-            if path == "/api/import/dry-run":
-                return self.api_import(dry_run=True)
-            if path == "/api/import/apply":
-                return self.api_import(dry_run=False)
+                resource = body.get("resource")
+                if not resource:
+                    self.send_error_json("Missing resource", status=400)
+                    return
+                params = {k: body.get(k) for k in ("status", "search", "folder", "perimeter") if body.get(k)}
+                fields = [f.strip() for f in body.get("fields", []) if f.strip()]
+                raw_items = cm.paginate_all(full_url(resource), params=params or None)
+                items = [flatten_export(item) for item in raw_items]
+                if fields:
+                    items = [{k: item.get(k) for k in fields if k in item} for item in items]
+                file_name = safe_file_name(f"{resource}_{now_stamp()}.json")
+                target = EXPORT_DIR / file_name
+                target.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+                self.send_json({"ok": True, "file": file_name, "downloadUrl": f"/exports/{file_name}", "count": len(items)})
+                return
 
-            self.send_text("Not found", status=404)
+            if path in ("/api/import/dry-run", "/api/import/apply"):
+                resource = body.get("resource")
+                content = body.get("content") or "[]"
+                key_field = body.get("key") or "id"
+                exclude = [x.strip() for x in (body.get("exclude") or "").split(",") if x.strip()]
+                strict = bool(body.get("strict", True))
+                dry_run = path.endswith("dry-run")
+
+                if not resource:
+                    self.send_error_json("Missing resource", status=400)
+                    return
+
+                payload = json.loads(content)
+                records = parse_records(payload)
+                url = full_url(resource)
+                ref_index = cm.build_ref_id_index(url) if key_field == "ref_id" else {}
+                results = []
+                skipped = 0
+                errors = 0
+
+                for record in records:
+                    try:
+                        uuid = record.get("id")
+                        if key_field == "ref_id" and record.get("ref_id"):
+                            uuid = ref_index.get(str(record.get("ref_id")).strip())
+                        payload_item = build_payload(record, exclude_keys=exclude, resource=resource)
+                        diff = None
+                        method = "POST"
+                        target = url
+                        if uuid:
+                            method = "PATCH"
+                            target = url.rstrip("/") + f"/{uuid}/"
+                            if strict:
+                                payload_item, diff = strict_payload(url, uuid, payload_item)
+                            if not payload_item:
+                                skipped += 1
+                                results.append({"id": uuid, "method": method, "skipped": True, "diff": diff})
+                                continue
+                        if dry_run:
+                            results.append({"id": uuid, "method": method, "target": target, "payload": payload_item, "diff": diff})
+                        else:
+                            status, response = cm.api_request(method, target, data=payload_item)
+                            ok = 200 <= status < 300
+                            if not ok:
+                                errors += 1
+                            results.append({"id": uuid, "method": method, "status": status, "ok": ok, "response": response, "diff": diff})
+                    except Exception as item_exc:
+                        errors += 1
+                        results.append({"ok": False, "error": str(item_exc), "record": record})
+
+                self.send_json({
+                    "ok": errors == 0,
+                    "resource": resource,
+                    "count": len(records),
+                    "skipped": skipped,
+                    "errors": errors,
+                    "strict": strict,
+                    "dryRun": dry_run,
+                    "results": results,
+                })
+                return
+
+            # Stubs volontaires pour les prochaines evolutions.
+            # Tu me donneras ensuite les endpoints/champs CISO Assistant exacts.
+            if path in ("/api/domains/save", "/api/roles/save"):
+                self.send_json({
+                    "ok": False,
+                    "implemented": False,
+                    "message": "Endpoint placeholder. Il faut renseigner les appels API CISO Assistant exacts avant activation.",
+                    "received": body,
+                }, status=501)
+                return
+
+            self.send_error_json("Not found", status=404)
+        except SystemExit:
+            raise
         except Exception as exc:
-            self.handle_error(exc)
-
-    def serve_file(self, file_path):
-        file_path = Path(file_path).resolve()
-        if not str(file_path).startswith(str(WEB_DIR.resolve())):
-            self.send_text("Forbidden", status=403)
-            return
-        if not file_path.exists() or not file_path.is_file():
-            self.send_text("Not found", status=404)
-            return
-        content_type = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
-        raw = file_path.read_bytes()
-        self.send_response(200)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(raw)))
-        self.end_headers()
-        self.wfile.write(raw)
-
-    def api_health(self):
-        self.send_json({
-            "ok": True,
-            "app": APP_NAME,
-            "version": APP_VERSION,
-            "baseUrl": base_url(),
-            "tokenConfigured": token_configured(),
-            "verifySsl": verify_ssl_enabled(),
-            "hostOnly": "127.0.0.1 recommended",
-        })
-
-    def api_resources(self):
-        resources = sorted(getattr(cm, "KNOWN_ENDPOINTS", {}).keys())
-        self.send_json({"ok": True, "resources": resources})
-
-    def api_options(self, query):
-        resource = (query.get("resource") or [""])[0] or None
-        self.send_json({"ok": True, "options": build_options_for_ui(resource)})
-
-    def api_data(self, query):
-        resource = (query.get("resource") or [""])[0]
-        if not resource:
-            self.send_json({"ok": False, "error": "Missing resource parameter."}, status=400)
-            return
-
-        search = (query.get("search") or [""])[0].strip() or None
-        status_filter = (query.get("status") or [""])[0].strip() or None
-        folder_filter = (query.get("folder") or [""])[0].strip() or None
-        perimeter_filter = (query.get("perimeter") or [""])[0].strip() or None
-        fields_raw = (query.get("fields") or [""])[0]
-        fields = [x.strip() for x in fields_raw.split(",") if x.strip()]
-        page_size = (query.get("page_size") or ["500"])[0]
-
-        url = full_url(resource)
-        params = {}
-        if status_filter:
-            params["status"] = status_filter
-        if search:
-            params["search"] = search
-        if folder_filter:
-            params["folder"] = folder_filter
-        if perimeter_filter:
-            params["perimeter"] = perimeter_filter
-        if page_size:
-            params["page_size"] = page_size
-
-        raw_items = cm.paginate_all(url, params=params)
-        export_items = [flatten_export(x) for x in raw_items]
-        display_items = [display_object(x) for x in raw_items]
-
-        if fields:
-            if "id" not in fields:
-                fields.insert(0, "id")
-            export_items = [{field: item.get(field) for field in fields} for item in export_items]
-            display_items = [{field: item.get(field) for field in fields} for item in display_items]
-
-        self.send_json({
-            "ok": True,
-            "resource": resource,
-            "count": len(display_items),
-            "items": display_items,
-            "exportItems": export_items,
-            "lookupsLoaded": sorted(LOOKUP_CACHE.keys()),
-        })
-
-    def api_export(self):
-        payload = self.read_json()
-        resource = payload.get("resource")
-        if not resource:
-            self.send_json({"ok": False, "error": "Missing resource."}, status=400)
-            return
-
-        fields = payload.get("fields") or []
-        if isinstance(fields, str):
-            fields = [x.strip() for x in fields.split(",") if x.strip()]
-        params = payload.get("params") or {}
-        search = payload.get("search") or None
-        status_filter = payload.get("status") or None
-        folder_filter = payload.get("folder") or None
-        perimeter_filter = payload.get("perimeter") or None
-
-        if status_filter:
-            params["status"] = status_filter
-        if search:
-            params["search"] = search
-        if folder_filter:
-            params["folder"] = folder_filter
-        if perimeter_filter:
-            params["perimeter"] = perimeter_filter
-
-        url = full_url(resource)
-        raw_items = cm.paginate_all(url, params=params)
-        items = [flatten_export(x) for x in raw_items]
-
-        if fields:
-            if "id" not in fields:
-                fields.insert(0, "id")
-            items = [{field: item.get(field) for field in fields} for item in items]
-
-        filename = safe_file_name(f"{resource}_{now_stamp()}.json")
-        output_path = EXPORT_DIR / filename
-        output_path.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
-
-        log_event("export", resource=resource, count=len(items), file=filename)
-        self.send_json({
-            "ok": True,
-            "resource": resource,
-            "count": len(items),
-            "file": filename,
-            "downloadUrl": f"/api/download?file={urllib.parse.quote(filename)}",
-        })
-
-    def api_import(self, dry_run=True):
-        payload = self.read_json()
-        resource = payload.get("resource")
-        content = payload.get("content")
-        key_field = payload.get("key") or "id"
-        exclude_keys = payload.get("exclude") or []
-        strict = bool(payload.get("strict", True))
-        if isinstance(exclude_keys, str):
-            exclude_keys = [x.strip() for x in exclude_keys.split(",") if x.strip()]
-
-        if not resource:
-            self.send_json({"ok": False, "error": "Missing resource."}, status=400)
-            return
-        if not content:
-            self.send_json({"ok": False, "error": "Missing JSON content."}, status=400)
-            return
-
-        import_data = json.loads(content) if isinstance(content, str) else content
-        records = parse_records(import_data)
-        url = full_url(resource)
-
-        ref_index = {}
-        if key_field == "ref_id":
-            ref_index = cm.build_ref_id_index(url)
-
-        results = []
-        errors = 0
-        skipped = 0
-
-        for idx, item in enumerate(records, start=1):
-            if not isinstance(item, dict):
-                errors += 1
-                results.append({"index": idx, "ok": False, "error": "Record is not an object."})
-                continue
-
-            identifier = item.get("id") if key_field == "id" else item.get("ref_id")
-            uuid = None
-            if key_field == "id" and identifier:
-                uuid = str(identifier)
-            elif key_field == "ref_id" and identifier:
-                uuid = ref_index.get(str(identifier).strip())
-
-            method = "PATCH" if uuid else "POST"
-            target = url.rstrip("/") + f"/{uuid}/" if uuid else url
-            body = build_payload(item, exclude_keys=exclude_keys, resource=resource)
-            diff_info = {"strict": strict, "compared": False, "removed": []}
-
-            if strict and method == "PATCH":
-                body, diff_info = strict_payload(url, uuid, body)
-
-            if method == "PATCH" and not body:
-                skipped += 1
-                results.append({
-                    "index": idx,
-                    "ok": True,
-                    "action": "SKIP",
-                    "target": target,
-                    "reason": "No changed field to send",
-                    "diff": diff_info,
-                })
-                continue
-
-            if dry_run:
-                results.append({
-                    "index": idx,
-                    "ok": True,
-                    "action": method,
-                    "target": target,
-                    "payload": body,
-                    "diff": diff_info,
-                })
-                continue
-
-            status, data = cm.api_request(method, target, data=body)
-            ok = 200 <= status < 300
-            if not ok:
-                errors += 1
-            results.append({
-                "index": idx,
-                "ok": ok,
-                "action": method,
-                "status": status,
-                "response": data,
-                "diff": diff_info,
-            })
-
-        log_event(
-            "import_dry_run" if dry_run else "import_apply",
-            resource=resource,
-            count=len(records),
-            errors=errors,
-            skipped=skipped,
-            key=key_field,
-            strict=strict,
-        )
-        self.send_json({
-            "ok": errors == 0,
-            "dryRun": dry_run,
-            "resource": resource,
-            "count": len(records),
-            "errors": errors,
-            "skipped": skipped,
-            "strict": strict,
-            "results": results,
-        }, status=200 if errors == 0 else 207)
-
-    def api_download(self, query):
-        filename = safe_file_name((query.get("file") or [""])[0])
-        if not filename:
-            self.send_text("Missing file", status=400)
-            return
-        path = (EXPORT_DIR / filename).resolve()
-        if not str(path).startswith(str(EXPORT_DIR.resolve())) or not path.exists():
-            self.send_text("File not found", status=404)
-            return
-        raw = path.read_bytes()
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
-        self.send_header("Content-Length", str(len(raw)))
-        self.end_headers()
-        self.wfile.write(raw)
+            self.send_error_json(str(exc), details=traceback.format_exc())
 
 
 def main():
@@ -657,28 +515,17 @@ def main():
     parser.add_argument("--no-browser", action="store_true", help="Do not open the browser automatically")
     args = parser.parse_args()
 
-    if args.host not in ("127.0.0.1", "localhost"):
-        print("[WARNING] You are not binding to localhost. This may expose the tool on the network.")
-
-    server = ThreadingHTTPServer((args.host, args.port), CisoWebHandler)
-    url = f"http://{args.host}:{args.port}"
-    print(f"[OK] {APP_NAME} v{APP_VERSION} running on {url}")
-    print("[INFO] Press Ctrl+C to stop.")
-    log_event("server_start", host=args.host, port=args.port, baseUrl=base_url(), tokenConfigured=token_configured())
-
+    httpd = ThreadingHTTPServer((args.host, args.port), CisoWebHandler)
+    url = f"http://{args.host}:{args.port}/"
+    print(f"[INFO] {APP_NAME} v{APP_VERSION}")
+    print(f"[INFO] Listening on {url}")
+    print("[INFO] Local tool: do not expose it on an untrusted network.")
     if not args.no_browser:
-        try:
-            webbrowser.open(url)
-        except Exception:
-            pass
-
+        webbrowser.open(url)
     try:
-        server.serve_forever()
+        httpd.serve_forever()
     except KeyboardInterrupt:
-        print("\n[INFO] Server stopped.")
-    finally:
-        log_event("server_stop")
-        server.server_close()
+        print("\n[INFO] Stopped.")
 
 
 if __name__ == "__main__":

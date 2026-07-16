@@ -15,121 +15,201 @@
     <div id="health" class="health">Loading...</div>
   </header>
 
-  <main class="layout">
-    <section class="panel controls">
-      <h2>Data Explorer</h2>
+  <nav class="nav-tabs" aria-label="Main navigation">
+    <button class="tab active" data-page="explorerPage">Data Explorer</button>
+    <button class="tab" data-page="domainsPage">Domains</button>
+    <button class="tab" data-page="rolesPage">Roles & Permissions</button>
+  </nav>
 
-      <label for="resourceSelect">Resource</label>
-      <select id="resourceSelect"></select>
+  <main>
+    <section id="explorerPage" class="page active">
+      <div class="layout">
+        <section class="panel controls">
+          <h2>Data Explorer</h2>
 
-      <div class="grid two">
-        <div>
-          <label for="statusFilter">Status</label>
-          <select id="statusFilter">
-            <option value="">All statuses</option>
-          </select>
-        </div>
-        <div>
-          <label for="searchFilter">API search</label>
-          <input id="searchFilter" placeholder="Search text" />
-        </div>
+          <label for="resourceSelect">Resource</label>
+          <select id="resourceSelect"></select>
+
+          <div class="grid two">
+            <div>
+              <label for="statusFilter">Status</label>
+              <select id="statusFilter"><option value="">All statuses</option></select>
+            </div>
+            <div>
+              <label for="searchFilter">API search</label>
+              <input id="searchFilter" placeholder="Search text" />
+            </div>
+          </div>
+
+          <div class="grid two">
+            <div>
+              <label for="folderFilter">Folder</label>
+              <select id="folderFilter"><option value="">All folders</option></select>
+            </div>
+            <div>
+              <label for="perimeterFilter">Perimeter</label>
+              <select id="perimeterFilter"><option value="">All perimeters</option></select>
+            </div>
+          </div>
+
+          <label for="fieldsInput">Columns / export fields</label>
+          <input id="fieldsInput" placeholder="id,ref_id,name,status,folder" />
+
+          <div class="grid two compact-grid">
+            <div>
+              <label for="pageSizeSelect">Rows per page</label>
+              <select id="pageSizeSelect">
+                <option>50</option>
+                <option selected>100</option>
+                <option>250</option>
+                <option>500</option>
+              </select>
+            </div>
+            <div>
+              <label for="localSearch">Local table filter</label>
+              <input id="localSearch" placeholder="Filter loaded table" />
+            </div>
+          </div>
+
+          <details class="column-selectors">
+            <summary>Display and export columns</summary>
+            <h3>Display Columns</h3>
+            <div id="displayColumns" class="checkbox-list"></div>
+            <h3>Export Columns</h3>
+            <div id="exportColumns" class="checkbox-list"></div>
+          </details>
+
+          <div class="button-row">
+            <button id="loadBtn">Load Data</button>
+            <button id="exportBtn" class="secondary">Export Full Dataset</button>
+            <button id="exportFilteredBtn" class="secondary">Export Filtered Results</button>
+            <button id="refreshOptionsBtn" class="secondary soft">Refresh Lists</button>
+          </div>
+          <div id="exportResult" class="message"></div>
+        </section>
+
+        <section class="panel import-panel">
+          <h2>Import JSON</h2>
+          <p class="hint">Strict mode removes unchanged fields from PATCH payloads. Use dry-run first.</p>
+
+          <label for="importFile">JSON file</label>
+          <input id="importFile" type="file" accept=".json,application/json" />
+
+          <div class="grid two">
+            <div>
+              <label for="keySelect">Identification key</label>
+              <select id="keySelect">
+                <option value="id">id</option>
+                <option value="ref_id">ref_id</option>
+              </select>
+            </div>
+            <div>
+              <label for="excludeInput">Exclude fields</label>
+              <input id="excludeInput" placeholder="folder,library,provider" />
+            </div>
+          </div>
+
+          <label class="checkbox-line">
+            <input id="strictImport" type="checkbox" checked />
+            Strict import: send only changed fields on PATCH
+          </label>
+
+          <div class="button-row">
+            <button id="dryRunBtn">Dry-run Import</button>
+            <button id="applyImportBtn" class="danger">Apply Import</button>
+          </div>
+          <pre id="importResult" class="output"></pre>
+        </section>
+
+        <section class="panel results-panel">
+          <div class="results-header">
+            <div>
+              <h2>Results</h2>
+              <p id="resultSummary" class="hint">No data loaded yet.</p>
+            </div>
+            <div class="pagination-bar">
+              <button id="prevPageBtn" class="secondary soft">Previous</button>
+              <span id="pageIndicator">Page 1 / 1</span>
+              <button id="nextPageBtn" class="secondary soft">Next</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="dataTable">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
       </div>
-
-      <div class="grid two">
-        <div>
-          <label for="folderFilter">Folder</label>
-          <select id="folderFilter">
-            <option value="">All folders</option>
-          </select>
-        </div>
-        <div>
-          <label for="perimeterFilter">Perimeter</label>
-          <select id="perimeterFilter">
-            <option value="">All perimeters</option>
-          </select>
-        </div>
-      </div>
-
-      <label for="fieldsInput">Columns / export fields</label>
-      <input id="fieldsInput" placeholder="id,ref_id,name,status,folder" />
-
-      <div class="column-selectors">
-        <h3>Display Columns</h3>
-        <div id="displayColumns"></div>
-
-        <h3>Export Columns</h3>
-        <div id="exportColumns"></div>
-      </div>
-
-      <div class="button-row">
-        <button id="loadBtn">Load Data</button>
-        <button id="exportBtn" class="secondary">Export Full Dataset</button>
-        <button id="exportFilteredBtn" class="secondary">Export Filtered Results</button>
-        <button id="refreshOptionsBtn" class="secondary soft">Refresh Lists</button>
-      </div>
-
-      <div id="exportResult" class="message"></div>
     </section>
 
-    <section class="panel import-panel">
-      <h2>Import JSON</h2>
-      <p class="hint">Strict mode removes unchanged fields from PATCH payloads. Use dry-run first.</p>
-
-      <label for="importFile">JSON file</label>
-      <input id="importFile" type="file" accept=".json,application/json" />
-
-      <div class="grid two">
-        <div>
-          <label for="keySelect">Identification key</label>
-          <select id="keySelect">
-            <option value="id">id</option>
-            <option value="ref_id">ref_id</option>
-          </select>
-        </div>
-        <div>
-          <label for="excludeInput">Exclude fields</label>
-          <input id="excludeInput" placeholder="folder,library,provider" />
-        </div>
+    <section id="domainsPage" class="page">
+      <div class="single-layout">
+        <section class="panel">
+          <h2>Domains organisation</h2>
+          <p class="hint">Preparation screen for managing domains and sub-domains. The API write endpoint is currently a placeholder.</p>
+          <div class="grid two">
+            <div>
+              <label for="domainName">Domain name</label>
+              <input id="domainName" placeholder="Example: Security Governance" />
+            </div>
+            <div>
+              <label for="domainParent">Parent domain</label>
+              <input id="domainParent" placeholder="Optional parent id or name" />
+            </div>
+          </div>
+          <label for="domainDescription">Description</label>
+          <textarea id="domainDescription" placeholder="Purpose, scope, owner..."></textarea>
+          <div class="button-row">
+            <button id="addDomainDraftBtn">Add draft line</button>
+            <button id="saveDomainsBtn" class="secondary">Save domains</button>
+          </div>
+          <div id="domainsMessage" class="message"></div>
+          <div class="table-wrap medium">
+            <table id="domainsTable">
+              <thead><tr><th>Domain</th><th>Parent</th><th>Description</th><th>Action</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
       </div>
-
-      <label class="checkbox-line">
-        <input id="strictImport" type="checkbox" checked />
-        Strict import: send only changed fields on PATCH
-      </label>
-
-      <div class="button-row">
-        <button id="dryRunBtn">Dry-run Import</button>
-        <button id="applyImportBtn" class="danger">Apply Import</button>
-      </div>
-
-      <pre id="importResult" class="output"></pre>
     </section>
 
-    <section class="panel results-panel">
-      <div class="results-header">
-        <div>
-          <h2>Results</h2>
-          <p id="resultSummary" class="hint">No data loaded yet.</p>
-        </div>
-        <div>
-          <label for="localSearch">Local table filter</label>
-          <input id="localSearch" placeholder="Filter loaded table" />
-        </div>
-      </div>
-
-      <div class="table-wrap">
-        <table id="dataTable">
-          <thead></thead>
-          <tbody></tbody>
-        </table>
+    <section id="rolesPage" class="page">
+      <div class="single-layout">
+        <section class="panel">
+          <h2>Roles and permissions</h2>
+          <p class="hint">Preparation screen for role creation and permission assignment. The API write endpoint is currently a placeholder.</p>
+          <div class="grid two">
+            <div>
+              <label for="roleName">Role name</label>
+              <input id="roleName" placeholder="Example: GRC Contributor" />
+            </div>
+            <div>
+              <label for="roleScope">Scope</label>
+              <input id="roleScope" placeholder="Global, domain, folder, perimeter..." />
+            </div>
+          </div>
+          <label for="rolePermissions">Permissions</label>
+          <textarea id="rolePermissions" placeholder="One permission per line"></textarea>
+          <div class="button-row">
+            <button id="addRoleDraftBtn">Add draft line</button>
+            <button id="saveRolesBtn" class="secondary">Save roles</button>
+          </div>
+          <div id="rolesMessage" class="message"></div>
+          <div class="table-wrap medium">
+            <table id="rolesTable">
+              <thead><tr><th>Role</th><th>Scope</th><th>Permissions</th><th>Action</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </section>
   </main>
 
-  <footer>
-    Localhost-only administration tool. Do not expose it on an untrusted network.
-  </footer>
+  <footer>Localhost-only administration tool. Do not expose it on an untrusted network.</footer>
 
-  <script src="/web/app.js"></script>
+  <script type="module" src="/web/js/app.js"></script>
 </body>
 </html>

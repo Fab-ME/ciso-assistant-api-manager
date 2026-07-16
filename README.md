@@ -36,6 +36,16 @@ Cet outil est destiné aux :
 - ✅ Aucun secret stocké dans le code (variables d'environnement)
 - ✅ Zéro dépendance externe (stdlib Python uniquement)
 - ✅ Compatible Python 3.8+
+- ✅ Interface Web locale intégrée
+- ✅ Filtres par colonne
+- ✅ Sélection dynamique des colonnes visibles
+- ✅ Tri des colonnes
+- ✅ Pagination locale
+- ✅ Export JSON filtré
+- ✅ Traduction automatique UUID → libellés métiers
+- ✅ Préparation de la gestion des domaines et sous-domaines
+- ✅ Préparation de la gestion des rôles et permissions
+- ✅ Cache intelligent des référentiels
 
 ---
 
@@ -228,30 +238,36 @@ python ciso_manager.py get metric-definitions --all
 
 ```
 ciso-assistant-api-manager/
-├── ciso_manager.py       # Script principal (aucune dépendance externe)
-├── ciso_web.py           # Script interface web (aucune dépendance externe)
-├── LICENSE              # MIT avec restriction d'usage commercial
-├── README.md            # Documentation principale
-├── CHANGELOG.md         # Historique des versions
+├── ciso_manager.py
+├── ciso_web.py
+├── README.md
+├── CHANGELOG.md
 │
-├── exports/            # Fichiers exportés par l'application
+├── exports/
 │   └── .gitkeep
 │
-├── imports/            # Fichiers destinés à être importés
+├── imports/
 │   └── .gitkeep
 │
-├── logs/               # Journaux d'exécution
+├── logs/
 │   └── .gitkeep
 │
 ├── web/
-│   ├── index.html      # Interface utilisateur
-│   ├── app.js          # Logique JavaScript
-│   └── style.css       # Feuille de style
+│   ├── index.html
+│   ├── style.css
+│   └── js/
+│       ├── api.js
+│       ├── app.js
+│       ├── dom.js
+│       ├── domains.js
+│       ├── explorer.js
+│       ├── imports.js
+│       ├── roles.js
+│       ├── state.js
+│       ├── table.js
+│       └── utils.js
 │
 └── examples/
-    ├── create_metrics.json    # Exemple : création de métriques
-    ├── update_metrics.json    # Exemple : mise à jour partielle
-    └── export_policies.sh     # Exemple : script d'export
 ```
 
 ---
@@ -278,6 +294,28 @@ MIT License with Commercial Use Restriction — Copyright (c) 2026 Fab-ME
 📩 Contact commercial : [contact@fab-me.com](mailto:contact@fab-me.com)
 
 Voir [LICENSE](./LICENSE) pour les termes complets.
+
+---
+
+## Interface Web
+
+Le projet intègre une interface Web locale permettant :
+
+- d'explorer les données CISO Assistant ;
+- de filtrer par statut, dossier, périmètre ou texte ;
+- d'effectuer des recherches locales ;
+- d'exporter les jeux de données en JSON ;
+- d'importer des objets avec dry-run ;
+- de gérer les colonnes visibles ;
+- de trier les résultats ;
+- de parcourir les résultats par pagination.
+
+---
+
+### Lancement
+
+```bash
+python ciso_web.py
 
 ---
 

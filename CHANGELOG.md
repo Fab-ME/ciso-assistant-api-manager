@@ -65,3 +65,70 @@ Première release publique.
   - `[{"id": "x"}, {"id": "y"}]` → `["x", "y"]`
   - Objets imbriqués complexes (ex: `cost`) → aplatis récursivement
 - Exclusion automatique des métadonnées non ré-importables (`created_at`, `updated_at`, `str`, `repr`…)
+
+---
+
+## [1.2.0] - 2026-07-16
+
+### Ajouté
+
+#### Interface Web
+- Nouvelle architecture modulaire JavaScript.
+- Découpage du fichier app.js en plusieurs modules :
+  - api.js
+  - app.js
+  - dom.js
+  - explorer.js
+  - imports.js
+  - table.js
+  - state.js
+  - utils.js
+  - domains.js
+  - roles.js
+
+#### Gestion des données
+- Tri dynamique sur toutes les colonnes.
+- Pagination locale.
+- Cache local de recherche pour améliorer les performances.
+- Gestion avancée des colonnes affichées.
+- Gestion avancée des colonnes exportées.
+
+#### Nouvelles pages
+- Ajout d'une page "Domains organisation".
+- Ajout d'une page "Roles and permissions".
+- Préparation des futures opérations CRUD sur les domaines.
+- Préparation des futures opérations CRUD sur les rôles et permissions.
+
+#### Backend Web
+- Refonte du serveur ciso_web.py.
+- Ajout d'un cache TTL pour les référentiels.
+- Amélioration de la résolution UUID → libellés.
+- Ajout des routes :
+  - /api/domains/save
+  - /api/roles/save
+
+### Corrigé
+
+#### Export
+- Correction d'un problème d'export JSON filtré pouvant exporter un objet incorrect après application de filtres.
+
+#### Interface
+- Correction de plusieurs problèmes CSS.
+- Correction de la gestion des colonnes visibles.
+- Correction de la gestion des colonnes exportées.
+
+#### Performance
+- Réduction des recalculs JSON.stringify()
+- Optimisation du rendu des grands tableaux.
+
+### Modifié
+
+#### Structure du projet
+
+Ancien :
+
+```text
+web/
+├── index.html
+├── app.js
+└── style.css
