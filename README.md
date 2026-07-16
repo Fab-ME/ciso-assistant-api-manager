@@ -229,6 +229,7 @@ python ciso_manager.py get metric-definitions --all
 ```
 ciso-assistant-api-manager/
 ├── ciso_manager.py       # Script principal (aucune dépendance externe)
+├── ciso_web.py           # Script interface web (aucune dépendance externe)
 ├── LICENSE              # MIT avec restriction d'usage commercial
 ├── README.md            # Documentation principale
 ├── CHANGELOG.md         # Historique des versions
