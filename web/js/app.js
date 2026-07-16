@@ -3,6 +3,7 @@ import { bindExplorerEvents, loadHealth, loadResources, loadOptions } from "./ex
 import { bindImportEvents } from "./imports.js";
 import { bindFoldersEvents, loadFolders } from "./folders.js";
 import { bindRolesEvents } from "./roles.js";
+import { bindCsvMapperEvents } from "./csv_mapper.js";
 
 function bindNavigation() {
   document.querySelectorAll(".tab").forEach((tab) => {
@@ -10,10 +11,10 @@ function bindNavigation() {
       document.querySelectorAll(".tab").forEach((item) => item.classList.remove("active"));
       document.querySelectorAll(".page").forEach((page) => page.classList.remove("active"));
       tab.classList.add("active");
-      $(tab.dataset.page).classList.add("active");
+      $(tab.dataset.page)?.classList.add("active");
 
       if (tab.dataset.page === "foldersPage") {
-        loadFolders().catch((error) => console.error(error));
+        loadFolders?.().catch((error) => console.error(error));
       }
     });
   });
@@ -38,12 +39,9 @@ async function start() {
   bindNavigation();
   bindExplorerEvents();
   bindImportEvents();
-  bindFoldersEvents();
-  try {
-    bindRolesEvents();
-  } catch(error) {
-    console.warn("Roles page not loaded:", error);
-  }
+  bindFoldersEvents?.();
+  bindRolesEvents?.();
+  bindCsvMapperEvents();
 
   await loadHealth();
   await loadResources();

@@ -268,3 +268,32 @@ a { color: var(--primary); font-weight: 700; }
   .results-header { flex-direction: column; align-items: stretch; }
   .pagination-bar { justify-content: space-between; }
 }
+
+.folder-parent-display {
+  width: 100%;
+  background: transparent;
+  color: var(--primary, #2563eb);
+  border: 1px solid transparent;
+  padding: 6px 8px;
+  text-align: left;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.folder-parent-display:hover {
+  background: #eef2ff;
+  border-color: #dbe2ea;
+}
+
+.folder-parent-select {
+  min-width: 180px;
+}
+
+.tree-box ul {
+  margin-top: 6px;
+  padding-left: 22px;
+}
+
+.tree-box li {
+  margin: 4px 0;
+}
