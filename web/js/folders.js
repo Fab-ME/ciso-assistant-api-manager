@@ -208,3 +208,38 @@ function renderTree() {
 
   const container =
     document.getElementById(
+      "foldersTree"
+    );
+
+  if (!container) return;
+
+  const roots =
+    state.folders.filter(
+      folder =>
+        getParentId(folder) === null
+    );
+
+  container.innerHTML = `
+    <ul>
+      ${roots
+        .map(renderTreeNode)
+        .join("")}
+    </ul>
+  `;
+}
+
+export function bindFoldersEvents() {
+
+  loadFolders()
+    .catch(error => {
+
+      console.error(error);
+
+      setMessage(
+        "foldersMessage",
+        error.message,
+        "error"
+      );
+
+    });
+}
