@@ -259,7 +259,7 @@ ciso-assistant-api-manager/
 │       ├── api.js
 │       ├── app.js
 │       ├── dom.js
-│       ├── domains.js
+│       ├── folders.js
 │       ├── explorer.js
 │       ├── imports.js
 │       ├── roles.js
@@ -323,3 +323,15 @@ python ciso_web.py
 
 Les issues et pull requests sont les bienvenues pour les corrections de bugs et l'ajout de nouveaux endpoints.
 Pour toute contribution significative, ouvrir d'abord une issue pour en discuter.
+
+
+# Gestion des Folders
+
+L'interface Web intègre désormais un gestionnaire complet des folders CISO Assistant.
+
+Les folders correspondent aux domaines organisationnels et supportent une hiérarchie native via le champ :
+
+```json
+{
+  "parent_folder": "<uuid>"
+}

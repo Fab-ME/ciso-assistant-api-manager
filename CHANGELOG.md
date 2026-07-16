@@ -132,3 +132,27 @@ web/
 ├── index.html
 ├── app.js
 └── style.css
+
+## [1.2.1] - 2026-07-16
+
+### Ajouté
+
+- Gestionnaire de folders.
+- Chargement automatique des folders.
+- Affichage hiérarchique des folders.
+- Endpoint GET /api/folders.
+- Endpoint POST /api/folders/save.
+- Résolution automatique parent_folder → nom du parent.
+- Calcul du nombre d'enfants.
+
+### Modifié
+
+- Remplacement de la page Domains par une page Folders.
+- Ajout d'un éditeur de parent_folder.
+- Réorganisation de l'interface Web.
+
+### Corrigé
+
+- Gestion propre des erreurs API CISO Assistant.
+- Suppression des ERR_EMPTY_RESPONSE.
+- Affichage détaillé des erreurs 401/403.

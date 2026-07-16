@@ -3,15 +3,30 @@ export async function api(path, options = {}) {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
+
   const text = await response.text();
-  let data;
+  let data = {};
+
   try {
     data = text ? JSON.parse(text) : {};
   } catch (error) {
     throw new Error(text || response.statusText);
   }
+
   if (!response.ok || data.ok === false) {
-    throw new Error(data.error || data.message || response.statusText);
+    const details = [];
+
+    if (data.apiStatus) details.push(`HTTP ${data.apiStatus}`);
+    if (data.apiDetail) details.push(data.apiDetail);
+
+    let message = data.error || response.statusText || 'API error';
+
+    if (details.length) {
+      message += ` (${details.join(' - ')})`;
+    }
+
+    throw new Error(message);
   }
+
   return data;
 }

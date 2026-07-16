@@ -47,6 +47,14 @@ async function saveRoles() {
 }
 
 export function bindRolesEvents() {
+  const addBtn = document.getElementById("addRoleDraftBtn");
+  const saveBtn = document.getElementById("saveRolesBtn");
+
+  if (!addBtn || !saveBtn) {
+      console.warn("Roles UI not present");
+      return;
+  }
+
   $("addRoleDraftBtn").addEventListener("click", addRoleDraft);
   $("saveRolesBtn").addEventListener("click", () => saveRoles().catch((e) => setMessage("rolesMessage", e.message, "error")));
   renderRolesDraft();
