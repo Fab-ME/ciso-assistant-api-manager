@@ -653,7 +653,38 @@ class CisoWebHandler(BaseHTTPRequestHandler):
             "downloadUrl": f"/api/download?file={urllib.parse.quote(filename)}",
         })
 
+    def build_key_index(self, url, key_field, resource=None):
+        """Construit un index <cle fonctionnelle> -> id pour permettre un vrai upsert.
+
+        Exemples de cle : id, ref_id, name ou tout autre champ present dans les objets.
+        """
+        items = safe_paginate_all(url, resource=resource)
+        index = {}
+        for obj in items:
+            if not isinstance(obj, dict):
+                continue
+            uid = obj.get("id")
+            if not uid:
+                continue
+            if key_field == "id":
+                index[str(uid).strip()] = str(uid).strip()
+                continue
+            value = obj.get(key_field)
+            if value is None:
+                continue
+            if isinstance(value, dict):
+                value = value.get("id") or value.get("name") or value.get("str")
+            if value is not None:
+                index[str(value).strip()] = str(uid).strip()
+        return index
+
     def api_import(self, dry_run=True):
+        """Import upsert : modifie si la cle existe, cree sinon.
+
+        - Si la cle selectionnee est trouvee en base : PATCH /resource/{id}/
+        - Si la cle n'est pas trouvee : POST /resource/
+        - Si la cle est absente de la ligne : POST /resource/
+        """
         payload = self.read_json()
         resource = payload.get("resource")
         content = payload.get("content")
@@ -674,13 +705,13 @@ class CisoWebHandler(BaseHTTPRequestHandler):
         records = parse_records(import_data)
         url = full_url(resource)
 
-        ref_index = {}
-        if key_field == "ref_id":
-            ref_index = build_ref_id_index_safe(url, resource=resource)
+        key_index = self.build_key_index(url, key_field, resource=resource)
 
         results = []
         errors = 0
         skipped = 0
+        created = 0
+        updated = 0
 
         for idx, item in enumerate(records, start=1):
             if not isinstance(item, dict):
@@ -688,14 +719,17 @@ class CisoWebHandler(BaseHTTPRequestHandler):
                 results.append({"index": idx, "ok": False, "error": "Record is not an object."})
                 continue
 
-            identifier = item.get("id") if key_field == "id" else item.get("ref_id")
+            identifier = item.get(key_field)
             uuid = None
-            if key_field == "id" and identifier:
-                uuid = str(identifier)
-            elif key_field == "ref_id" and identifier:
-                uuid = ref_index.get(str(identifier).strip())
+            if identifier is not None and str(identifier).strip() != "":
+                uuid = key_index.get(str(identifier).strip())
+                if key_field == "id" and not uuid:
+                    # En mode id, si l'id est fourni mais introuvable, on le traite comme creation.
+                    # L'id ne sera pas envoye dans le payload car build_payload exclut id par defaut.
+                    uuid = None
 
             method = "PATCH" if uuid else "POST"
+            action = "UPDATE" if uuid else "CREATE"
             target = url.rstrip("/") + f"/{uuid}/" if uuid else url
             body = build_payload(item, exclude_keys=exclude_keys, resource=resource)
             diff_info = {"strict": strict, "compared": False, "removed": []}
@@ -709,18 +743,28 @@ class CisoWebHandler(BaseHTTPRequestHandler):
                     "index": idx,
                     "ok": True,
                     "action": "SKIP",
+                    "method": method,
                     "target": target,
+                    "key": key_field,
+                    "identifier": identifier,
                     "reason": "No changed field to send",
                     "diff": diff_info,
                 })
                 continue
 
             if dry_run:
+                if action == "CREATE":
+                    created += 1
+                else:
+                    updated += 1
                 results.append({
                     "index": idx,
                     "ok": True,
-                    "action": method,
+                    "action": action,
+                    "method": method,
                     "target": target,
+                    "key": key_field,
+                    "identifier": identifier,
                     "payload": body,
                     "diff": diff_info,
                 })
@@ -730,11 +774,18 @@ class CisoWebHandler(BaseHTTPRequestHandler):
             ok = 200 <= status < 300
             if not ok:
                 errors += 1
+            elif action == "CREATE":
+                created += 1
+            else:
+                updated += 1
             results.append({
                 "index": idx,
                 "ok": ok,
-                "action": method,
+                "action": action,
+                "method": method,
                 "status": status,
+                "key": key_field,
+                "identifier": identifier,
                 "response": data,
                 "diff": diff_info,
             })
@@ -745,6 +796,8 @@ class CisoWebHandler(BaseHTTPRequestHandler):
             count=len(records),
             errors=errors,
             skipped=skipped,
+            created=created,
+            updated=updated,
             key=key_field,
             strict=strict,
         )
@@ -753,8 +806,11 @@ class CisoWebHandler(BaseHTTPRequestHandler):
             "dryRun": dry_run,
             "resource": resource,
             "count": len(records),
-            "errors": errors,
+            "created": created,
+            "updated": updated,
             "skipped": skipped,
+            "errors": errors,
+            "key": key_field,
             "strict": strict,
             "results": results,
         }, status=200 if errors == 0 else 207)

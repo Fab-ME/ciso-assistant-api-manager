@@ -127,11 +127,13 @@ Première release publique.
 
 Ancien :
 
-```text
+text
 web/
 ├── index.html
 ├── app.js
 └── style.css
+
+---
 
 ## [1.2.1] - 2026-07-16
 
@@ -180,4 +182,50 @@ web/
 - Aucune nouvelle route backend dédiée n'est nécessaire.
 - Le CSV est converti en JSON côté navigateur puis transmis aux endpoints existants `/api/import/dry-run` et `/api/import/apply`.
 
-## [1.4.0]2 3### Ajouté4 5- Export CSV exemple.6- Export JSON exemple.7- Support de l'import JSON dans CSV Mapper.8- Sauvegarde et chargement des mappings.9- Résolution automatique des UID en noms lisibles.
+## [1.4.0]
+
+### Ajouté
+
+- Export CSV exemple.
+- Export JSON exemple.
+- Support de l'import JSON dans CSV Mapper.
+- Sauvegarde et chargement des mappings.
+- Résolution automatique des UID en noms lisibles.
+
+---
+
+## [1.4.1] - 2026-07-16
+
+### Corrigé
+
+- Correction de l'import CSV/JSON pour gérer réellement la création et la modification.
+- Le moteur d'import applique maintenant une logique d'upsert : `PATCH` si l'objet existe, `POST` sinon.
+
+### Ajouté
+
+- Comptage des créations, modifications, lignes ignorées et erreurs dans le résultat d'import.
+- Support d'une clé de rapprochement plus souple : `id`, `ref_id` ou `name`.
+
+### Modifié
+
+- Mise à jour de `ciso_web.py` pour construire un index de rapprochement sur la clé choisie.
+- Mise à jour de `index.html` pour ajouter `name` dans les clés de rapprochement du CSV Mapper.
+
+## [1.4.2] - 2026-07-16
+
+### Corrigé
+
+- Correction du flux export/import CSV : les exports importables conservent désormais les UID techniques.
+- Suppression de la conversion automatique libellé -> UID à l'import CSV pour éviter les erreurs API 400 sur les champs relationnels comme `folder`.
+
+### Ajouté
+
+- Export CSV technique importable.
+- Export CSV lisible pour contrôle humain.
+- Export JSON technique importable.
+- Export JSON lisible pour contrôle humain.
+
+### Modifié
+
+- Les libellés lisibles sont réservés à l'affichage écran et aux exports explicitement marqués lisibles.
+- Le CSV à réimporter doit provenir de l'export CSV technique importable ou contenir les UID attendus par l'API.

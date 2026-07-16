@@ -49,7 +49,7 @@
         <section class="panel import-panel">
           <h2>Import JSON</h2><p class="hint">Strict mode removes unchanged fields from PATCH payloads. Use dry-run first.</p>
           <label for="importFile">JSON file</label><input id="importFile" type="file" accept=".json,application/json" />
-          <div class="grid two"><div><label for="keySelect">Identification key</label><select id="keySelect"><option value="id">id</option><option value="ref_id">ref_id</option></select></div><div><label for="excludeInput">Exclude fields</label><input id="excludeInput" placeholder="folder,library,provider" /></div></div>
+          <div class="grid two"><div><label for="keySelect">Identification key</label><select id="keySelect"><option value="id">id</option><option value="ref_id">ref_id</option><option value="name">name</option></select></div><div><label for="excludeInput">Exclude fields</label><input id="excludeInput" placeholder="folder,library,provider" /></div></div>
           <label class="checkbox-line"><input id="strictImport" type="checkbox" checked /> Strict import: send only changed fields on PATCH</label>
           <div class="button-row"><button id="dryRunBtn">Dry-run Import</button><button id="applyImportBtn" class="danger">Apply Import</button></div>
           <pre id="importResult" class="output"></pre>
@@ -78,7 +78,7 @@
 
           <div class="grid two">
             <div><label for="csvResourceSelect">Ressource cible</label><select id="csvResourceSelect"></select></div>
-            <div><label for="csvKeySelect">Clé de rapprochement</label><select id="csvKeySelect"><option value="id">id</option><option value="ref_id">ref_id</option></select></div>
+            <div><label for="csvKeySelect">Clé de rapprochement</label><select id="csvKeySelect"><option value="id">id</option><option value="ref_id">ref_id</option><option value="name">name</option></select></div>
           </div>
 
           <div class="grid two">
@@ -90,8 +90,9 @@
 
           <div class="button-row">
             <button id="csvLoadExistingBtn">Charger les éléments en base</button>
-            <button id="csvExportExampleBtn" class="secondary soft">Exporter CSV exemple</button>
-            <button id="jsonExportExampleBtn" class="secondary soft">Exporter JSON lisible</button>
+            <button id="csvExportTechnicalBtn" class="secondary soft">Exporter CSV technique importable</button>
+            <button id="csvExportReadableBtn" class="secondary soft">Exporter CSV lisible</button>
+            <button id="jsonExportReadableBtn" class="secondary soft">Exporter JSON lisible</button>
             <button id="jsonExportTechnicalBtn" class="secondary soft">Exporter JSON technique</button>
           </div>
           <div id="csvMapperMessage" class="message"></div>

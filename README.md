@@ -373,4 +373,65 @@ web/index.html
 ```
 
 > Le backend n'a pas besoin d'une nouvelle route spécifique : le CSV Mapper convertit le CSV en JSON côté navigateur puis réutilise le moteur d'import existant.
+## Import CSV/JSON en mode création ou mise à jour
 
+Le moteur d'import fonctionne maintenant en **upsert** :
+
+- si la clé sélectionnée existe déjà en base, l'objet est modifié avec `PATCH` ;
+- si la clé sélectionnée n'existe pas, l'objet est créé avec `POST` ;
+- si la clé est absente dans une ligne, la ligne est considérée comme une création.
+
+### Clés de rapprochement disponibles
+
+- `id`
+- `ref_id`
+- `name`
+
+Le sélecteur est disponible dans la page **CSV Mapper**.
+
+### Résultat du dry-run ou de l'import
+
+Le résultat indique maintenant :
+
+```json
+{
+  "created": 3,
+  "updated": 12,
+  "skipped": 1,
+  "errors": 0
+}
+```
+
+### Fichiers concernés
+
+```text
+ciso_web.py
+web/js/csv_mapper.js
+web/index.html
+```
+
+## CSV Mapper - option 1 : affichage lisible, exports importables techniques
+
+Le CSV Mapper applique maintenant la règle suivante :
+
+- à l'écran, les références comme `folder`, `owner`, `team`, `entity`, `perimeter` sont affichées avec des libellés lisibles quand les lookups sont disponibles ;
+- les exports destinés à l'import conservent les valeurs techniques attendues par l'API, notamment les UID ;
+- l'import CSV n'essaie plus de convertir les libellés en UID : il attend des valeurs techniques issues de l'export importable.
+
+### Boutons disponibles
+
+- **Exporter CSV technique importable** : export CSV avec UID, à utiliser comme base de réimport.
+- **Exporter CSV lisible** : export CSV avec libellés, uniquement pour lecture/contrôle.
+- **Exporter JSON technique importable** : export JSON brut pour réimport.
+- **Exporter JSON lisible** : export JSON avec libellés, uniquement pour lecture/contrôle.
+
+### Fichiers concernés
+
+```text
+web/js/csv_mapper.js
+web/js/app.js
+web/index.html
+ciso_web.py
+```
+
+`ciso_web.py` inclut aussi le correctif d'import upsert : `PATCH` si la clé existe, `POST` sinon.
