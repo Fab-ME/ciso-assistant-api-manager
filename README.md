@@ -281,21 +281,6 @@ python ciso_manager.py export --help
 python ciso_manager.py import --help
 python ciso_manager.py get    --help
 ```
-
----
-
-## Licence
-
-MIT License with Commercial Use Restriction — Copyright (c) 2026 Fab-ME
-
-- ✅ Usage personnel et interne : **libre et gratuit**
-- ✅ Modification et redistribution : **autorisées**
-- ❌ Usage commercial (intégration dans un produit payant, prestation, SaaS, hébergement tiers) : **accord préalable requis**
-
-📩 Contact commercial : [contact@fab-me.com](mailto:contact@fab-me.com)
-
-Voir [LICENSE](./LICENSE) pour les termes complets.
-
 ---
 
 ## Interface Web
@@ -317,6 +302,7 @@ Le projet intègre une interface Web locale permettant :
 
 ```bash
 python ciso_web.py
+```
 
 ---
 
@@ -356,16 +342,16 @@ Import massif de données à partir de fichiers CSV.
 
 Fonctionnalités :
 
-- détection automatique du séparateur
-- mapping visuel CSV → API
-- prévisualisation JSON
-- Dry Run
-- Import réel
-- mode Upsert
-- clé de rapprochement :
-  - id
-  - ref_id
-  - name
+- ✅ détection automatique du séparateur
+- ✅ mapping visuel CSV → API
+- ✅ prévisualisation JSON
+- ✅ Dry Run
+- ✅ Import réel
+- ✅ mode Upsert
+- ✅ clé de rapprochement :
+- ✅ id
+- ✅ ref_id
+- ✅ name
 
 #### Moteur de résolution
 
@@ -430,6 +416,21 @@ Résultat d'import :
   "skipped": 1,
   "errors": 0
 }
+```
+
+---
+
+## Licence
+
+MIT License with Commercial Use Restriction — Copyright (c) 2026 Fab-ME
+
+- ✅ Usage personnel et interne : **libre et gratuit**
+- ✅ Modification et redistribution : **autorisées**
+- ❌ Usage commercial (intégration dans un produit payant, prestation, SaaS, hébergement tiers) : **accord préalable requis**
+
+📩 Contact commercial : [contact@fab-me.com](mailto:contact@fab-me.com)
+
+Voir [LICENSE](./LICENSE) pour les termes complets.
 
 ---
 
