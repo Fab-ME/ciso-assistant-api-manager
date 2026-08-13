@@ -168,6 +168,18 @@ ASSET_TYPE_IMPORT_MAP = {
     "support": "SP",
 }
 
+# Mapping officiel CISO Assistant pour vulnerabilities.severity (texte → entier -1..3)
+SEVERITY_IMPORT_MAP = {
+    "--": -1,
+    "undefined": -1,
+    "none": -1,
+    "info": 0,
+    "low": 1,
+    "medium": 2,
+    "high": 3,
+    "critical": 4,
+}
+
 # ─────────────────────────────────────────────
 # RÉSOLUTION D'ENDPOINT
 # ─────────────────────────────────────────────
@@ -465,6 +477,13 @@ RESOURCE_STRING_FIELDS: dict = {
     # "metrology/custom-metric-samples": {"extra_field"},
 }
 
+# Champs pour lesquels une valeur `null` explicite dans le JSON importé
+# doit être envoyée telle quelle à l'API (pour vider le champ), plutôt
+# que d'être ignorée (comportement par défaut en PATCH).
+NULLABLE_FIELDS = {
+    "due_date",
+}
+
 def _parse_complex_field(val, key=None, resource=None):
     """
     Détecte et reconstruit les champs complexes lors de l'import.
@@ -508,7 +527,9 @@ def build_payload(item, exclude_keys=None, resource=None):
     - Exclut 'id' et les clés de exclude_keys
     - Préserve les champs STRING_FIELDS comme chaînes (pas de désérialisation JSON)
     - Reconstruit les autres champs complexes (listes, dicts imbriqués)
-    - Ignore les valeurs None / chaînes vides
+    - Ignore les valeurs None / chaînes vides, sauf pour les champs listés
+      dans NULLABLE_FIELDS, où `null` est envoyé explicitement pour vider
+      le champ côté API.
     """
     skip = {"id"} | (set(exclude_keys) if exclude_keys else set())
     payload = {}
@@ -518,6 +539,8 @@ def build_payload(item, exclude_keys=None, resource=None):
             continue
 
         if val is None:
+            if key in NULLABLE_FIELDS:
+                payload[key] = None
             continue
         if isinstance(val, str) and not val.strip():
             continue
@@ -527,6 +550,10 @@ def build_payload(item, exclude_keys=None, resource=None):
         # Normalisation des types d'assets
         if resource == "assets" and key == "type":
             parsed = ASSET_TYPE_IMPORT_MAP.get(parsed, parsed)
+
+        # Normalisation de la sévérité des vulnérabilités (texte → entier -1..3)
+        if resource == "vulnerabilities" and key == "severity" and isinstance(parsed, str):
+            parsed = SEVERITY_IMPORT_MAP.get(parsed.strip().lower(), parsed)
 
         if parsed is None:
             continue
