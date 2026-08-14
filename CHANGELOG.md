@@ -148,3 +148,38 @@ Première release publique.
 - Les exports lisibles sont réservés à la consultation humaine.
 
 ---
+
+## [2.1.0] - 2026-08-14
+
+### 🚀 Nouveau
+
+#### Import simplifié des objectifs d'assets
+
+- Les champs `security_objectives`, `security_capabilities`,
+  `disaster_recovery_objectives` et `recovery_capabilities` de la ressource
+  `assets` acceptent désormais un dict plat en entrée (`{"confidentiality": 2, ...}`)
+  au lieu de la structure imbriquée complète attendue par l'API.
+- Reconstruction automatique de la structure `{"objectives": {clé: {"value": N, "is_enabled": true}}}`
+  pour `security_objectives` / `security_capabilities`.
+- Reconstruction automatique de la structure `{"objectives": {clé: {"value": N}}}`
+  (sans `is_enabled`) pour `disaster_recovery_objectives` / `recovery_capabilities`.
+- Rétrocompatible : un export déjà au format complet (clé `objectives` présente)
+  est réimporté sans transformation.
+- Possibilité de mixer valeurs simples et forme détaillée par clé
+  (ex: `"confidentiality": {"value": 2, "is_enabled": false}`) pour désactiver
+  explicitement un objectif.
+- Les clés non reconnues sont ignorées silencieusement (pas d'erreur API sur
+  un champ inattendu).
+
+---
+## [2.1.1] - 2026-08-14
+
+### 🐞 Correctifs
+
+- `security_objectives` / `security_capabilities` / `disaster_recovery_objectives`
+  / `recovery_capabilities` : le format simplifié "liste de dicts à une clé"
+  (`[{"confidentiality": 2}, {"integrity": 3}]`) n'était pas reconnu par
+  `_expand_asset_objectives()` (seul le dict plat l'était) et était envoyé
+  tel quel à l'API. Les deux formats sont désormais acceptés indifféremment.
+
+---

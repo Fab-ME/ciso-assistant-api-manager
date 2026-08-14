@@ -5,7 +5,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.8+-blue)
 ![License](https://img.shields.io/badge/license-MIT%20%2B%20Commercial%20Restriction-orange)
-![Version](https://img.shields.io/badge/version-2.0.0-green)
+![Version](https://img.shields.io/badge/version-2.1.0-green)
 ![Maintainer](https://img.shields.io/badge/maintainer-Fab--ME-blue)
 
 ---
@@ -123,6 +123,64 @@ python ciso_manager.py import policies --file politiques.json --exclude library,
 ```
 
 **Règle :** objet avec `id` → `PATCH` (mise à jour partielle), sans `id` → `POST` (création).
+
+#### Import simplifié des objectifs d'assets (`security_objectives`, `security_capabilities`, `disaster_recovery_objectives`, `recovery_capabilities`)
+
+Ces champs de la ressource `assets` attendent normalement une structure imbriquée
+complexe côté API CISO Assistant. L'outil accepte désormais un **dict plat**
+en entrée et reconstruit automatiquement la structure complète au moment de
+l'import :
+
+			   
+```json
+{
+  "name": "Serveur applicatif",
+  "type": "Primary",
+  "folder": "ee9b21f6-3b27-4cd6-b701-83885fdd164f",
+  "security_objectives": {
+    "confidentiality": 2,
+    "integrity": 3,
+    "availability": 1,
+    "proof": 2
+  },
+  "disaster_recovery_objectives": {
+    "rto": 4,
+    "rpo": 2
+  }
+}
+```
+
+								
+	   
+						
+						 
+				   
+					  
+			  
+ 
+   
+
+Ce qui est envoyé à l'API :
+
+```json
+"security_objectives": {
+  "objectives": {
+    "confidentiality": {"value": 2, "is_enabled": true},
+    "integrity":       {"value": 3, "is_enabled": true},
+    "availability":    {"value": 1, "is_enabled": true},
+    "proof":           {"value": 2, "is_enabled": true}
+  }
+}
+```
+
+Règles :
+
+- Valeurs `security_objectives` / `security_capabilities` : entier `0` à `4`.
+- Valeurs `disaster_recovery_objectives` / `recovery_capabilities` (`rto`, `rpo`, `mtd`) : entier `≥ 0`, pas de champ `is_enabled` (non supporté par l'API pour ces champs).
+- Clés reconnues pour les objectifs de sécurité : `confidentiality`, `integrity`, `availability`, `proof`, `authenticity`, `privacy`, `safety` — les autres clés sont ignorées.
+- Un export existant (déjà au format complet `{"objectives": {...}}`) reste compatible : il est réimporté tel quel, sans transformation.
+- Pour désactiver explicitement un objectif ou fixer `is_enabled` à `false`, on peut toujours passer la forme détaillée pour une clé donnée : `"confidentiality": {"value": 2, "is_enabled": false}`.
+- Le mode `--dry-run` affiche le payload final déjà transformé, pour vérification avant envoi.
 
 ### `get` — Consulter dans le terminal
 

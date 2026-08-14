@@ -180,6 +180,83 @@ SEVERITY_IMPORT_MAP = {
     "critical": 4,
 }
 
+# Clés valides pour security_objectives / security_capabilities (assets)
+# cf. Asset.DEFAULT_SECURITY_OBJECTIVES côté CISO Assistant
+ASSET_SECURITY_OBJECTIVE_KEYS = {
+    "confidentiality",
+    "integrity",
+    "availability",
+    "proof",
+    "authenticity",
+    "privacy",
+    "safety",
+}
+
+# Clés valides pour disaster_recovery_objectives / recovery_capabilities (assets)
+# cf. Asset.DEFAULT_DISASTER_RECOVERY_OBJECTIVES côté CISO Assistant
+ASSET_DR_OBJECTIVE_KEYS = {"rto", "rpo", "mtd"}
+
+# Champs "assets" au format {"objectives": {clé: {"value": N, "is_enabled": bool?}}}
+# côté API, simplifiables en entrée sous forme de dict plat {clé: N}.
+ASSET_OBJECTIVES_FIELDS = {
+    "security_objectives": (ASSET_SECURITY_OBJECTIVE_KEYS, True),
+    "security_capabilities": (ASSET_SECURITY_OBJECTIVE_KEYS, True),
+    "disaster_recovery_objectives": (ASSET_DR_OBJECTIVE_KEYS, False),
+    "recovery_capabilities": (ASSET_DR_OBJECTIVE_KEYS, False),
+}
+
+
+def _expand_asset_objectives(parsed, allowed_keys, with_is_enabled):
+    """
+    Convertit un format simplifié saisi par l'utilisateur vers la structure
+    complète attendue par l'API CISO Assistant :
+        {"objectives": {"confidentiality": {"value": 2, "is_enabled": true}, ...}}
+
+    Deux formats simplifiés sont acceptés en entrée :
+      1. Dict plat :        {"confidentiality": 2, "integrity": 3}
+      2. Liste de dicts     [{"confidentiality": 2}, {"integrity": 3}]
+         à une seule clé    (chaque élément doit contenir exactement une clé)
+
+    Règles :
+      - Si le dict est déjà au format complet (clé "objectives" présente),
+        il est retourné inchangé (permet de continuer à importer des exports
+        existants sans les retoucher).
+      - Les clés inconnues (hors allowed_keys) sont ignorées.
+      - Si une valeur est déjà un dict (ex: {"value": 2, "is_enabled": false}),
+        elle est conservée telle quelle, pour permettre un contrôle fin quand
+        nécessaire (ex: désactiver explicitement un objectif).
+      - with_is_enabled=True ajoute "is_enabled": true (security_objectives /
+        security_capabilities) ; disaster_recovery_objectives et
+        recovery_capabilities n'ont pas ce champ côté API.
+    """
+    # Normalisation du format "liste de dicts à une clé" vers un dict plat
+    if isinstance(parsed, list):
+        flat = {}
+        for entry in parsed:
+            if isinstance(entry, dict):
+                flat.update(entry)
+        parsed = flat
+
+    if not isinstance(parsed, dict):
+        return parsed
+    if "objectives" in parsed:
+        return parsed  # déjà au format complet, on ne touche pas
+
+    objectives = {}
+    for key, value in parsed.items():
+        if key not in allowed_keys:
+            continue
+        if isinstance(value, dict):
+            objectives[key] = value
+            continue
+        entry = {"value": int(value)}
+        if with_is_enabled:
+            entry["is_enabled"] = True
+        objectives[key] = entry
+
+    return {"objectives": objectives}
+
+
 # ─────────────────────────────────────────────
 # RÉSOLUTION D'ENDPOINT
 # ─────────────────────────────────────────────
@@ -550,6 +627,14 @@ def build_payload(item, exclude_keys=None, resource=None):
         # Normalisation des types d'assets
         if resource == "assets" and key == "type":
             parsed = ASSET_TYPE_IMPORT_MAP.get(parsed, parsed)
+
+        # Simplification des objectifs/capacités de sécurité et de reprise
+        # d'activité (assets) : dict plat {"confidentiality": 2, ...} →
+        # structure complète {"objectives": {"confidentiality": {"value": 2,
+        # "is_enabled": true}, ...}} attendue par l'API.
+        if resource == "assets" and key in ASSET_OBJECTIVES_FIELDS:
+            allowed_keys, with_is_enabled = ASSET_OBJECTIVES_FIELDS[key]
+            parsed = _expand_asset_objectives(parsed, allowed_keys, with_is_enabled)
 
         # Normalisation de la sévérité des vulnérabilités (texte → entier -1..3)
         if resource == "vulnerabilities" and key == "severity" and isinstance(parsed, str):
